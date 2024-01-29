@@ -35,24 +35,26 @@ void Keys(){
     key[7] = "}+-_}{]=(#$})&&}}!)!&]_)=![%_[}_@![!_&-$&@=+#{}@}[@]_*+&$&_{&??*?$*=?]*=}!*}(@&_!#?-+(+-?]}&?-$&]$+([+#*#?$_@%!@-%(&*_)}-?=?$$[}";
     key[8] = "%!@*}-&#]$%__?$_}%%-#-%[$[*?$*-?-*%&+]+*{{!#-}=#!)&&)[_*%&$?}%!*?{##&_[?#{$#{)=*%?%=+*#]@@%(-%@[%+{{?]%%?{$)![)&__*#(@=!)_)(&@}*";
     key[9] = "(}=?%=[)=)&[#!$?#*{*]-?]!+[[!-))}$!(@%!]@]{=&=$%)_#]#})@}#?@&+(!={+[=[@&)=_+%[]*_@-&-]]](*+=]&{(!!$#%}%+-?%_-&{*!&[$@)%_()(-()*}";
+
+    for(int i=0;i<200;i++) {client[i].IPsize = 0;}
 }
    
 void fill_dummy(int start, char* data) {
-    for(int i=start;i<keyLen;i++) {data[i] =  rand()%35;}
+    for(int i=start;i<keyLen;i++) {data[i] =  97+rand()%20;}
 }
    
 void XORCipher(char* data, int cifer, int k) {
+    for(int i=0;i<=strlen(data)+1;i++) {message_cifer[i]=data[i];}
     if(cifer==1){
         message_cifer[strlen(data)]='\0';
         fill_dummy(strlen(data)+1,(char*)message_cifer);
-
     }
 
 	for (int i = 0; i < keyLen; ++i) {
-        message_cifer[i] = data[i] ^ key[client[k].counter][i];
+        message_cifer[i] = message_cifer[i] ^ key[client[k].counter][i];
         if(message_cifer[i]=='\0' && cifer==0) {break;}
 	}
-    
+
     if(client[k].counter==numkeys-1){client[k].counter = 0;}
     else {client[k].counter++;}
 }
@@ -99,12 +101,11 @@ int main() {
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len);
         if(strcmp(buffer,message_init)==0) {restart = true;}
         else {restart = false;}   
-        //printf("%ld\n",strcmp(buffer,message_init));   
 
-        for (int k=0;k<200;k++) {
+        for (int k=1;k<200;k++) {
             if(client[k].IPsize>0){
-                for(int i=0;i<strlen(inet_ntoa(cliaddr.sin_addr));i++){
-                    if(client[k].IP[i]!=inet_ntoa(cliaddr.sin_addr)[i]){
+                for(int i=0;i<strlen(inet_ntoa(cliaddr.sin_addr));i++){                    
+                    if(client[k].IP[i]!=inet_ntoa(cliaddr.sin_addr)[i]){  
                         break;
                     }
                     if(i==strlen(inet_ntoa(cliaddr.sin_addr))-1){
@@ -118,7 +119,7 @@ int main() {
                             client[k].counter = 0;
                             printf("Cliente existente (nº%d) %s:%d -> Deu entrada\n", k, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                         }
-                        k=200;
+                        goto exit;
                     }
                 }
             }
@@ -127,18 +128,12 @@ int main() {
                 for(int i=0;i<client[k].IPsize;i++){
                         client[k].IP[i]=inet_ntoa(cliaddr.sin_addr)[i];
                 }
-                if (restart == false) {
-                    XORCipher(buffer,0,k);
-                    printf("Cliente novo (nº%d) %s:%d -> %s\n", k, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cifer);
-                    XORCipher((char*)message_test,1,k);  
-                }
-                else {
-                    client[k].counter = 0;
-                    printf("Cliente novo (nº%d) %s:%d -> Deu entrada\n", k, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
-                }
-                break;
+                client[k].counter = 0;
+                printf("Cliente novo (nº%d) %s:%d -> Deu entrada\n", k, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                goto exit;
             }
         }
+        exit:
         if(restart == false) {
             sendto(sockfd, (char*)message_cifer, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
         }
