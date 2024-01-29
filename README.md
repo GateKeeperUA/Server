@@ -1,2 +1,2 @@
 # Server
-Raspberry server main firmware repository
+Raspberry server code repository
