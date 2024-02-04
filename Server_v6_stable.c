@@ -13,19 +13,10 @@
 #define PORT    5005
 #define keyLen  128
 #define numkeys 500
-#define MaxClients 200
 
 volatile char* key[numkeys][keyLen];
 volatile char message_cifer[keyLen];
-   
-struct clients{
-    char IP[15];
-    int IPsize;
-    int counter;
-};
-
 volatile int ID_counter=1;
-volatile struct clients client[MaxClients]={};
 
 
 int Create_DataBase() {
@@ -42,7 +33,7 @@ int Create_DataBase() {
     return 1;
 }
 
-int Find_DataBase(char *IP) {
+int Find_in_DataBase(char *IP) {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
@@ -74,7 +65,7 @@ int Find_DataBase(char *IP) {
     return find;
 }
 
-int Add_DataBase(char* IP) {
+int Add_to_DataBase(char* IP) {
     char* err;
     sqlite3* db;
     sqlite3_open("SQLite/IP.db", &db);
@@ -141,6 +132,7 @@ int ReadCounter_DataBase(int ID) {
     sqlite3_close(db);
     return find;    
 }
+
 int Initialize(){
     char *filename = "Encryption_keys.txt";
     char dummy[keyLen];
@@ -165,13 +157,13 @@ void fill_dummy(int start, char* data) {
     data[keyLen-1]='\0';
 }
    
-int XORCipher(char* data, int cifer, int ID) {
-    int counter;
-    counter = ReadCounter_DataBase(ID);
-    if(cifer==1){
+int XORCipher(char* data, bool send, int ID) {
+    int counter = ReadCounter_DataBase(ID);
+    if(send==1){
         for(int i=0;i<strlen(data);i++) {message_cifer[i]=data[i];}
         message_cifer[strlen(data)]='\0';
         fill_dummy(strlen(data)+1,(char*)message_cifer);
+        counter++;
     }
     else {
         for(int i=0;i<keyLen;i++) {message_cifer[i]=data[i];}
@@ -179,25 +171,23 @@ int XORCipher(char* data, int cifer, int ID) {
 
 	for (int i=0;i<keyLen;++i) {
         message_cifer[i] = message_cifer[i] ^ (long int)key[counter][i];
-        if(message_cifer[i]=='\0' && cifer==0) {break;}
+        if(message_cifer[i]=='\0' && send==0) {break;}
 	}
 
     if(counter==numkeys-1){counter = 0;}
     else {counter++;}
 
-    if(UpdateCounter_DataBase(counter,ID)==0) {return 0;};
-    return 1;
+    return counter;
 }
 
-
 int main() {
-    int sockfd,ID;
+    int sockfd, ID, key_counter;
     char buffer[keyLen];
     struct sockaddr_in servaddr, cliaddr;
     int len;    
     bool restart;
     char* message_init="_%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-m&xq";
-    char* message_test = "The temperatue is 25ºC!";
+    char* message_test = "The temperature is 25ºC!";
 
     if(Create_DataBase()==0){return 1;}
     if(Initialize()==0){return 1;}    
@@ -234,16 +224,16 @@ int main() {
         else {restart = false;}   
         
         
-        ID = Find_DataBase(inet_ntoa(cliaddr.sin_addr));       
+        ID = Find_in_DataBase(inet_ntoa(cliaddr.sin_addr));       
         if(ID==0) {
-            if(Add_DataBase(inet_ntoa(cliaddr.sin_addr))==0){return 1;};
+            if(Add_to_DataBase(inet_ntoa(cliaddr.sin_addr))==0){return 1;};
             printf("New client (nº%d) %s:%d -> Has enter\n", ID_counter-1, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
         }
         else {
             if(restart==false) {
-                if(XORCipher(buffer,0,ID)==0) {return 1;}
+                XORCipher(buffer,0,ID);
                 printf("Existing client (nº%d) %s:%d -> %s\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cifer);
-                if(XORCipher((char*)message_test,1,ID)==0) {return 1;}
+                key_counter = XORCipher((char*)message_test,1,ID);
             }
             else {
                 if(UpdateCounter_DataBase(0,ID)==0) {return 1;}
@@ -253,6 +243,7 @@ int main() {
 
         if(restart == false) {
             sendto(sockfd, (char*)message_cifer, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
+            if(UpdateCounter_DataBase(key_counter,ID)==0) {return 1;};
         }
         else {
             sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);   
