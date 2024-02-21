@@ -66,8 +66,8 @@ void XORCipher(char* data, bool send, char type) {
     else {counter++;}
 }
 
-void  send_temperature() {
-    sprintf((char*)message_cipher,"2%d %d %d %d\0",225,1033,56,20);
+void send_temperature() {
+    sprintf((char*)message_cipher,"2%d %d %d %d \0",225,1033,56,20);
     fill_dummy(strlen((char*) message_cipher)+1,(char*)message_cipher);
 }
 
@@ -103,7 +103,8 @@ int main() {
         return 1;
     }
     sendto(sockfd, message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
-    recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, (struct sockaddr *) &servaddr, &len);
+    sleep(1);
+    recvfrom(sockfd, buffer, keyLen, MSG_DONTWAIT, (struct sockaddr *) &servaddr, &len);
     for(int i=0;i<keyLen-1;i++) {if(buffer[i]!=message_init[i+1]) {goto CONNECT;}}
 
     while(1){

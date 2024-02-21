@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <sqlite3.h>
+#include <math.h>
    
 #define PORT    5005
 #define keyLen  128
@@ -38,7 +39,7 @@ int Create_DataBase_Data() {
     sqlite3* db;
     sqlite3_stmt* stmt;
     sqlite3_open("SQLite/Server.db", &db);
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS Data(Temperature INT,Pressure INT,Humidity INT,Air Quality INT);",NULL,NULL,&err) != SQLITE_OK) {
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS Data(Temperature INT,Pressure INT,Humidity INT,Gas INT);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
     }
@@ -79,7 +80,7 @@ int Find_in_DataBase(char *IP) {
     return find;
 }
 
-int Add_to_DataBase(char* IP) {
+int Add_to_DataBase_IP(char* IP) {
     char* err;
     sqlite3* db;
     sqlite3_open("SQLite/Server.db", &db);
@@ -91,6 +92,23 @@ int Add_to_DataBase(char* IP) {
     //! 1 - DETI setudent
     //! 2 - DETI worker
     //! 3 - admin
+
+    if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
+        printf("\nError %s\n",err);
+        return 0;
+    }
+    sqlite3_close(db);
+    ID_counter++;
+    return 1;
+}
+
+int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas) {
+    char* err;
+    sqlite3* db;
+    sqlite3_open("SQLite/Server.db", &db);
+
+    char query[100];
+    sprintf(query,"insert into Data VALUES(%d,%d,%d,%d);",temperature,pressure,humidity,gas);
 
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
@@ -204,25 +222,43 @@ int XORCipher(char* data, bool send, int ID, char type) {
     return counter;
 }
 
-void receive_temperature(char* data) {
-    int i=1;
-    for(;data[i]!=' ';i++) {
-        printf("%c",data[i]);
+int receive_data(char* data) {
+    int temperature=0,pressure=0,humidity=0,gas=0,i=1,j=0,k=0;
+    char aux[10];
+    for(int i=1;data[i-1]!='\0';i++,k++) {
+        if(data[i]!=' ') {
+            aux[k]=data[i];
+        }
+        else {
+            switch(j) {
+                case 0:
+                    temperature = atoi(aux);
+                    printf("%dºC ",temperature);
+                    break;
+                case 1:
+                    pressure = atoi(aux);
+                    printf("%dhPA ",pressure);
+                    
+                    break;
+                case 2:
+                    humidity = atoi(aux);
+                    printf("%d%% ",humidity);
+                    break;
+                case 3:
+                    gas = atoi(aux);
+                    printf("%dgas\n",gas);
+                    break;
+            }
+            j++;
+            k=-1;
+            memset(aux, 0, 10);
+        }
     }
-    printf("ºC ");
-    for(i++;data[i]!=' ';i++) {
-        printf("%c",data[i]);
-    }
-    printf("hPa ");
-    for(i++;data[i]!=' ';i++) {
-        printf("%c",data[i]);
-    }
-    printf("%% ");
-    for(i++;data[i]!='\0';i++) {
-        printf("%c",data[i]);
-    }
-    printf("gas\n");
 
+    if(Add_to_DataBase_Data(temperature,pressure,humidity,gas)==0) {return 0;}
+    
+
+    return 1;
 }
 
 int main() {
@@ -277,7 +313,7 @@ int main() {
             case '0':
                 for(int i=0;i<keyLen-1;i++) {if(buffer[i+1]!=message_init[i]) {goto NOT_RESET;}}
                     if (ID==0){
-                        if(Add_to_DataBase(inet_ntoa(cliaddr.sin_addr))==0){return 1;};
+                        if(Add_to_DataBase_IP(inet_ntoa(cliaddr.sin_addr))==0){return 1;};
                         printf("Client (nº%d) %s:%d -> Has enter\n", ID_counter-1, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     else {
@@ -304,8 +340,8 @@ int main() {
 
             case '2':
                 if (ID>0) {
-                    printf("Temperature in room of client (nº%d) %s:%d is ", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
-                    receive_temperature(buffer);
+                    printf("Data in room of client (nº%d) %s:%d is ", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                    if(receive_data(buffer)==0) {return 1;}
                 }
         }
     }
