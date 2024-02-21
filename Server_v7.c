@@ -19,17 +19,17 @@ volatile char message_cipher[keyLen];
 volatile int ID_counter=1;
 
 
-int Create_DataBase() {
+int Create_DataBase_IP() {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
     sqlite3_open("SQLite/IP.db", &db);
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS IP(ID INT,IP1 varchar(3),IP2 varchar(3),IP3 varchar(3),IP4 varchar(3),IPsize varchar(2),counter INT);",NULL,NULL,&err) != SQLITE_OK) {
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS IP(ID INT,IP1 varchar(3),IP2 varchar(3),IP3 varchar(3),IP4 varchar(3),Counter INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
     }
     sqlite3_close(db);
-    printf("\nDataBase creation complete\n");
+    printf("\nIP DataBase creation complete\n");
     return 1;
 }
 
@@ -39,7 +39,7 @@ int Find_in_DataBase(char *IP) {
     sqlite3_stmt* stmt;
     sqlite3_open("SQLite/IP.db", &db);
 
-    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,IPsize,counter from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
     const unsigned char *aux;
     char *findIP;
     int find=0;
@@ -72,7 +72,11 @@ int Add_to_DataBase(char* IP) {
 
     for(int i=0;i<strlen(IP);i++){if(IP[i]=='.')IP[i]=',';}
     char query[100];
-    sprintf(query,"insert into IP VALUES(%d,%s,%ld,%d);",ID_counter,IP,strlen(IP),0);
+    sprintf(query,"insert into IP VALUES(%d,%s,%ld,%d);",ID_counter,IP,0,3);
+    //! 0 - not a student
+    //! 1 - DETI setudent
+    //! 2 - DETI worker
+    //! 3 - admin
 
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
@@ -89,7 +93,7 @@ int Initialize_DataBase() {
     sqlite3_stmt* stmt;
     sqlite3_open("SQLite/IP.db", &db);
 
-    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,IPsize,counter from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
     int find=0;
     while(sqlite3_step(stmt) != SQLITE_DONE) {
         find = sqlite3_column_int(stmt,0);
@@ -106,7 +110,7 @@ int UpdateCounter_DataBase(int counter,int ID) {
     sqlite3_stmt* stmt;
     sqlite3_open("SQLite/IP.db", &db);
 
-    sprintf(query,"UPDATE IP SET counter = %d Where ID = %d",counter,ID);
+    sprintf(query,"UPDATE IP SET Counter = %d Where ID = %d",counter,ID);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
@@ -121,13 +125,13 @@ int ReadCounter_DataBase(int ID) {
     sqlite3_stmt* stmt;
     sqlite3_open("SQLite/IP.db", &db);
 
-    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,IPsize,counter from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
 
     int find;
     for (int i=1;i<=ID;i++) {
         sqlite3_step(stmt);
     }
-    find = sqlite3_column_int(stmt,6);
+    find = sqlite3_column_int(stmt,5);
     sqlite3_reset(stmt);
     sqlite3_close(db);
     return find;    
@@ -198,10 +202,10 @@ int main() {
     struct sockaddr_in servaddr, cliaddr;
     int len;    
     bool restart;
-    char* message_init="0%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-m&xq";
+    char* message_init="%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-m&xq";
     char* message_ID = "In DataBase";
 
-    if(Create_DataBase()==0){return 1;}
+    if(Create_DataBase_IP()==0){return 1;}
     if(Initialize()==0){return 1;}    
        
     // Creating socket file descriptor
@@ -241,25 +245,28 @@ int main() {
         ID = Find_in_DataBase(inet_ntoa(cliaddr.sin_addr));
         switch (buffer[0]){
             case '0':
-                if(strcmp(buffer,message_init)==0) {
+                for(int i=0;i<keyLen-1;i++) {if(buffer[i+1]!=message_init[i]) {goto NOT_RESET;}}
                     if (ID==0){
                         if(Add_to_DataBase(inet_ntoa(cliaddr.sin_addr))==0){return 1;};
-                        printf("New client (nº%d) %s:%d -> Has enter\n", ID_counter-1, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        printf("Client (nº%d) %s:%d -> Has enter\n", ID_counter-1, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     else {
                         if(UpdateCounter_DataBase(0,ID)==0) {return 1;}
-                        printf("Existing client (nº%d) %s:%d -> Has enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        printf("Client (nº%d) %s:%d -> Has enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-                }
+                
+                break;
+                NOT_RESET:
+                sendto(sockfd, "Not initialized", 15, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                 break;
 
             case '1':
                 if (ID>0) {
                     XORCipher(buffer,false,ID,'1');
-                    printf("Existing client (nº%d) %s:%d -> %s\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
+                    printf("Client (nº%d) %s:%d -> %s\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
                     key_counter = XORCipher((char*)message_ID,true,ID,'1');
-
+                    
                     sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if(UpdateCounter_DataBase(key_counter,ID)==0) {return 1;};
                 }

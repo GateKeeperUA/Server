@@ -15,9 +15,9 @@
 #define keyLen   128
 #define numkeys  500
 
-volatile int counter;
-volatile char* key[numkeys][keyLen];
-volatile char message_cipher[keyLen];
+int counter;
+char* key[numkeys][keyLen];
+char message_cipher[keyLen];
 
 int Initialize(){
     char *filename = "Encryption_keys.txt";
@@ -67,7 +67,7 @@ void XORCipher(char* data, bool send, char type) {
 }
 
 void  send_temperature() {
-    sprintf((char*)message_cipher,"225.13");
+    sprintf((char*)message_cipher,"25.13");
     fill_dummy(strlen((char*) message_cipher)+1,(char*)message_cipher);
 }
 
@@ -77,8 +77,9 @@ int main() {
     char buffer[keyLen];
     char message[keyLen];
     struct sockaddr_in servaddr;
-    int len;
+    int len, try_connect=0;
     char option[2];
+    char* message_init="0%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-m&xq";
 
    if(Initialize()==1){return 1;}
 
@@ -96,11 +97,14 @@ int main() {
     servaddr.sin_addr.s_addr = inet_addr("192.168.0.240");
 
     CONNECT:
-    char* message_init="0%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-m&xq";
+    try_connect++;
+    if(try_connect>5) {
+        printf("Connection failed\n");
+        return 1;
+    }
     sendto(sockfd, message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
     recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, (struct sockaddr *) &servaddr, &len);
-    if(strcmp(message_init,buffer)==0) { printf("Conection established\n");}
-    else { goto CONNECT;}
+    for(int i=0;i<keyLen-1;i++) {if(buffer[i]!=message_init[i+1]) {goto CONNECT;}}
 
     while(1){
         memset(message, 0, sizeof(message));
@@ -110,6 +114,8 @@ int main() {
         //! 0 is new connection
         //! 1 is ID checkup on Database
         //! 2 is temperature data
+        
+        fflush(stdin);
         printf("\n\rChoose a simulation scenario:\n-1 is ID checkup on Database\n-2 is temperature data\n");
         fgets(option, 2, stdin);
 
