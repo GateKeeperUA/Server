@@ -23,7 +23,7 @@ int Create_DataBase_IP() {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
-    sqlite3_open("SQLite/IP.db", &db);
+    sqlite3_open("SQLite/Server.db", &db);
     if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS IP(ID INT,IP1 varchar(3),IP2 varchar(3),IP3 varchar(3),IP4 varchar(3),Counter INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
@@ -33,11 +33,25 @@ int Create_DataBase_IP() {
     return 1;
 }
 
+int Create_DataBase_Data() {
+    char* err;
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+    sqlite3_open("SQLite/Server.db", &db);
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS Data(Temperature INT,Pressure INT,Humidity INT,Air Quality INT);",NULL,NULL,&err) != SQLITE_OK) {
+        printf("\nError %s\n",err);
+        return 0;
+    }
+    sqlite3_close(db);
+    printf("Data DataBase creation complete\n");
+    return 1;
+}
+
 int Find_in_DataBase(char *IP) {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
-    sqlite3_open("SQLite/IP.db", &db);
+    sqlite3_open("SQLite/Server.db", &db);
 
     sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
     const unsigned char *aux;
@@ -68,7 +82,7 @@ int Find_in_DataBase(char *IP) {
 int Add_to_DataBase(char* IP) {
     char* err;
     sqlite3* db;
-    sqlite3_open("SQLite/IP.db", &db);
+    sqlite3_open("SQLite/Server.db", &db);
 
     for(int i=0;i<strlen(IP);i++){if(IP[i]=='.')IP[i]=',';}
     char query[100];
@@ -91,7 +105,7 @@ int Initialize_DataBase() {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
-    sqlite3_open("SQLite/IP.db", &db);
+    sqlite3_open("SQLite/Server.db", &db);
 
     sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
     int find=0;
@@ -108,7 +122,7 @@ int UpdateCounter_DataBase(int counter,int ID) {
     char query[100];
     sqlite3* db;
     sqlite3_stmt* stmt;
-    sqlite3_open("SQLite/IP.db", &db);
+    sqlite3_open("SQLite/Server.db", &db);
 
     sprintf(query,"UPDATE IP SET Counter = %d Where ID = %d",counter,ID);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
@@ -123,7 +137,7 @@ int ReadCounter_DataBase(int ID) {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
-    sqlite3_open("SQLite/IP.db", &db);
+    sqlite3_open("SQLite/Server.db", &db);
 
     sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
 
@@ -191,9 +205,24 @@ int XORCipher(char* data, bool send, int ID, char type) {
 }
 
 void receive_temperature(char* data) {
-    for(int i=1;data[i]!='\0';i++) {
-        message_cipher[i-1] = data[i];
+    int i=1;
+    for(;data[i]!=' ';i++) {
+        printf("%c",data[i]);
     }
+    printf("ºC ");
+    for(i++;data[i]!=' ';i++) {
+        printf("%c",data[i]);
+    }
+    printf("hPa ");
+    for(i++;data[i]!=' ';i++) {
+        printf("%c",data[i]);
+    }
+    printf("%% ");
+    for(i++;data[i]!='\0';i++) {
+        printf("%c",data[i]);
+    }
+    printf("gas\n");
+
 }
 
 int main() {
@@ -206,6 +235,7 @@ int main() {
     char* message_ID = "In DataBase";
 
     if(Create_DataBase_IP()==0){return 1;}
+    if(Create_DataBase_Data()==0){return 1;}
     if(Initialize()==0){return 1;}    
        
     // Creating socket file descriptor
@@ -274,8 +304,8 @@ int main() {
 
             case '2':
                 if (ID>0) {
+                    printf("Temperature in room of client (nº%d) %s:%d is ", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     receive_temperature(buffer);
-                    printf("Temperature in room of client (nº%d) %s:%d is %sºC\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
                 }
         }
     }
