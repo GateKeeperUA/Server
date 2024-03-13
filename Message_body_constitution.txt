@@ -1,17 +1,19 @@
-->ID 0
+->ID 0 (connect)
     0|126 chars(key)|\0
     Not encrypted
     Require response
     Initiated by client
 
-->ID 1
+->ID 1 (ID verification)
     1|126 chars(ID|\0|dummy chars)|\0
     Encrypted
     Require response
     Initiated by client
 
-->ID 2
+->ID 2 (Data)
     2|126 chars(Temperature Pressure Humidity Gas\0|dummy chars)|\0
     Not encrypted
     Don't require response
     Initiated by client
+
+->ID E (Emergency)

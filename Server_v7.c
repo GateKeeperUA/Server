@@ -182,14 +182,14 @@ int Initialize(){
         fgets(dummy,keyLen,fp);
     }
     fclose(fp);
-    printf("Keys upload complete\n");
+    printf("Keys upload completed\n");
 
     ID_counter = Initialize_DataBase();
     return 1;
 }
    
 void fill_dummy(int start, char* data) {
-    for(int i=start;i<keyLen-1;i++) {data[i] = 97+rand()%20;}
+    for(int i=start;i<keyLen-1;i++) {data[i] = rand()%126;}
     data[keyLen-1]='\0';
 }
    
@@ -200,7 +200,9 @@ int XORCipher(char* data, bool send, int ID, char type) {
         for(int i=0;i<strlen(data);i++) {message_cipher[i+1]=data[i];}
         message_cipher[strlen(data)+1]='\0';
         fill_dummy(strlen(data)+2,(char*)message_cipher);
-        counter++;
+        
+        if(counter==numkeys-1){counter = 0;}
+        else {counter++;}
 
         for (int i=1;i<keyLen;++i) {
             message_cipher[i] = message_cipher[i] ^ (long int)key[counter][i-1];
@@ -303,6 +305,7 @@ int main() {
         memset((char*) message_cipher, 0, sizeof(message_cipher));
         memset(buffer, 0, sizeof(buffer));
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len); 
+        //printf("%s\n",buffer);
         
         //! 0 is new connection
         //! 1 is ID checkup on Database
@@ -312,6 +315,7 @@ int main() {
         switch (buffer[0]){
             case '0':
                 for(int i=0;i<keyLen-1;i++) {if(buffer[i+1]!=message_init[i]) {goto NOT_RESET;}}
+                    sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if (ID==0){
                         if(Add_to_DataBase_IP(inet_ntoa(cliaddr.sin_addr))==0){return 1;};
                         printf("Client (nº%d) %s:%d -> Has enter\n", ID_counter-1, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
@@ -320,7 +324,6 @@ int main() {
                         if(UpdateCounter_DataBase(0,ID)==0) {return 1;}
                         printf("Client (nº%d) %s:%d -> Has enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
-                    sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                 
                 break;
                 NOT_RESET:

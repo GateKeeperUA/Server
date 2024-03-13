@@ -32,13 +32,13 @@ int Initialize(){
         fgets(dummy,keyLen,fp);
     }
     fclose(fp);
-    printf("\nKeys upload complete\n");
+    printf("\nKeys upload completed\n");
 
     counter = 0;
 }
 
 void fill_dummy(int start, char* data) {
-    for(int i=start;i<keyLen;i++) {data[i] = 97+rand()%20;}
+    for(int i=start;i<keyLen;i++) {data[i] = rand()%126;}
     data[keyLen-1]='\0';
 }
    
@@ -80,6 +80,7 @@ int main() {
     int len, try_connect=0;
     char option[2];
     char* message_init="0%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-m&xq";
+    
 
    if(Initialize()==1){return 1;}
 

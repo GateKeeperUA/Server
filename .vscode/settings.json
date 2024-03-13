@@ -2,7 +2,9 @@
     "files.associations": {
         "socket.h": "c",
         "string.h": "c",
-        "sqlite3.h": "c"
+        "sqlite3.h": "c",
+        "stdio.h": "c",
+        "unistd.h": "c"
     },
     "editor.fontSize": 14,
     "terminal.integrated.fontSize": 20
