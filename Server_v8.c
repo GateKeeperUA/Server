@@ -17,7 +17,6 @@
 
 volatile char* key[numkeys][keyLen];
 volatile char message_cipher[keyLen];
-volatile int ID_counter=1;
 
 
 int Create_DataBase_IP() {
@@ -86,7 +85,7 @@ int Find_in_DataBase(char *IP) {
     return find;
 }
 
-int Add_to_DataBase_IP(char* IP) {
+int Add_to_DataBase_IP(char* IP, int ID, int Permission) {
     char* err;
     sqlite3* db;
     if(sqlite3_open("SQLite/Server.db", &db)!=0) {
@@ -95,7 +94,7 @@ int Add_to_DataBase_IP(char* IP) {
 
     for(int i=0;i<strlen(IP);i++){if(IP[i]=='.')IP[i]=',';}
     char query[100];
-    sprintf(query,"insert into IP VALUES(%d,%s,%ld,%d);",ID_counter,IP,0,3);
+    sprintf(query,"insert into IP VALUES(%d,%s,%ld,%d);",ID,IP,0,Permission);
     //! 0 - not a student
     //! 1 - DETI setudent
     //! 2 - DETI worker
@@ -106,7 +105,6 @@ int Add_to_DataBase_IP(char* IP) {
         return 0;
     }
     sqlite3_close(db);
-    ID_counter++;
     return 1;
 }
 
@@ -128,7 +126,7 @@ int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, i
     return 1;
 }
 
-int Initialize_DataBase() {
+/*int Initialize_DataBase() {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
@@ -144,7 +142,7 @@ int Initialize_DataBase() {
     sqlite3_reset(stmt);
     sqlite3_close(db);
     return find+1;
-}
+}*/
 
 int UpdateCounter_DataBase(int counter,int ID) {
     char* err;
@@ -175,9 +173,9 @@ int ReadCounter_DataBase(int ID) {
     sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
 
     int find;
-    for (int i=1;i<=ID;i++) {
+    do {
         sqlite3_step(stmt);
-    }
+    }while(sqlite3_column_int(stmt,0)!=ID);
     find = sqlite3_column_int(stmt,5);
     sqlite3_reset(stmt);
     sqlite3_close(db);
@@ -201,8 +199,6 @@ int Initialize(){
     }
     fclose(fp);
     printf("Keys upload completed\n");
-
-    ID_counter = Initialize_DataBase();
     return 1;
 }
    
@@ -287,7 +283,8 @@ int main() {
     struct sockaddr_in servaddr, cliaddr;
     int len;    
     bool restart;
-    char* message_init="%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-m&xq";
+    char ID_[3];
+    char* message_init="%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
     char* message_ID = "In DataBase";
 
     if(Initialize()==0){return 1;}    
@@ -320,6 +317,7 @@ int main() {
     while(1){
         memset((char*) message_cipher, 0, sizeof(message_cipher));
         memset(buffer, 0, sizeof(buffer));
+        memset(ID_, 0, sizeof(ID_));
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len); 
         //printf("%s\n",buffer);
         
@@ -330,11 +328,12 @@ int main() {
         ID = Find_in_DataBase(inet_ntoa(cliaddr.sin_addr));
         switch (buffer[0]){
             case '0':
-                for(int i=0;i<keyLen-1;i++) {if(buffer[i+1]!=message_init[i]) {goto NOT_RESET;}}
+                sprintf(ID_,"%c%c%c",buffer[1],buffer[2],buffer[3]);
+                for(int i=0;i<keyLen-5;i++) {if(buffer[i+5]!=message_init[i]) {goto NOT_RESET;}}
                     sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if (ID==0){
-                        if(Add_to_DataBase_IP(inet_ntoa(cliaddr.sin_addr))==0){return 1;};
-                        printf("Client (nº%d) %s:%d -> Has enter\n", ID_counter-1, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        if(Add_to_DataBase_IP(inet_ntoa(cliaddr.sin_addr),atoi(ID_),buffer[4]-'0')==0){return 1;};
+                        printf("Client (nº%d) %s:%d -> Has enter\n", ID_, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     else {
                         if(UpdateCounter_DataBase(0,ID)==0) {return 1;}
