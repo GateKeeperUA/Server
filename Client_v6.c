@@ -79,7 +79,8 @@ int main() {
     struct sockaddr_in servaddr;
     int len, try_connect=0;
     char option[2];
-    char* message_init="03143%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
+    char room[5];
+    char message_init[keyLen];
     
 
    if(Initialize()==1){return 1;}
@@ -96,6 +97,11 @@ int main() {
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(PORT);
     servaddr.sin_addr.s_addr = inet_addr("192.168.1.86");
+
+    printf("Choose room number and permission (4 numbers):\n");
+    fgets(room,5,stdin);
+    sprintf(message_init,"0%c%c%c%c%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-",room[0],room[1],room[2],room[3]);
+
 
     CONNECT:
     try_connect++;
@@ -117,7 +123,6 @@ int main() {
         //! 1 is ID checkup on Database
         //! 2 is temperature data
         
-        fflush(stdin);
         printf("\n\rChoose a simulation scenario:\n-1 is ID checkup on Database\n-2 is temperature data\n");
         fgets(option, 2, stdin);
 
