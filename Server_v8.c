@@ -85,7 +85,7 @@ int Find_in_DataBase(char *IP) {
     return find;
 }
 
-int Add_to_DataBase_IP(char* IP, int ID, int Permission) {
+int Add_to_DataBase_IP(char* IP, int ID, int permission) {
     char* err;
     sqlite3* db;
     if(sqlite3_open("SQLite/Server.db", &db)!=0) {
@@ -94,7 +94,7 @@ int Add_to_DataBase_IP(char* IP, int ID, int Permission) {
 
     for(int i=0;i<strlen(IP);i++){if(IP[i]=='.')IP[i]=',';}
     char query[100];
-    sprintf(query,"insert into IP VALUES(%d,%s,%ld,%d);",ID,IP,0,Permission);
+    sprintf(query,"insert into IP VALUES(%d,%s,%ld,%d);",ID,IP,0,permission);
     //! 0 - not a student
     //! 1 - DETI setudent
     //! 2 - DETI worker
@@ -159,6 +159,24 @@ int UpdateCounter_DataBase(int counter,int ID) {
         return 0;
     }
     sqlite3_close(db);
+    return 1;
+}
+
+int UpdatePermission_DataBase(int permission, int ID) {
+    char* err;
+    char query[100];
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+    if(sqlite3_open("SQLite/Server.db", &db)!=0) {
+        return 0;
+    }
+    sprintf(query,"UPDATE IP SET Permission = %d Where ID = %d",permission,ID);
+    if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
+        printf("\nError %s\n",err);
+        return 0;
+    }
+    sqlite3_close(db);
+
     return 1;
 }
 
@@ -317,7 +335,6 @@ int main() {
     while(1){
         memset((char*) message_cipher, 0, sizeof(message_cipher));
         memset(buffer, 0, sizeof(buffer));
-        memset(ID_, 0, sizeof(ID_));
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len); 
         //printf("%s\n",buffer);
         
@@ -333,13 +350,14 @@ int main() {
                     sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if (ID==0){
                         if(Add_to_DataBase_IP(inet_ntoa(cliaddr.sin_addr),atoi(ID_),buffer[4]-'0')==0){return 1;};
-                        printf("Client (nº%d) %s:%d -> Has enter\n", ID_, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        printf("Client (nº%d) %s:%d -> Has enter\n", atoi(ID_), inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     else {
                         if(UpdateCounter_DataBase(0,ID)==0) {return 1;}
-                        printf("Client (nº%d) %s:%d -> Has enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        if(UpdatePermission_DataBase(buffer[4]-'0',ID)==0) {return 1;}    
+                        printf("Client (nº%d) %s:%d -> Has enter\n", atoi(ID_), inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
-                
+                                
                 break;
                 NOT_RESET:
                 sendto(sockfd, "Not initialized", 15, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
