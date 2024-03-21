@@ -223,7 +223,7 @@ int XORCipher(char* data, bool send, int ID, char type) {
         if(counter==numkeys-1){counter = 0;}
         else {counter++;}
 
-        for (int i=1;i<keyLen;i++) {
+        for (int i=1;i<keyLen-1;i++) {
             message_cipher[i] = message_cipher[i] ^ key[counter][i-1];
         }
 	}
