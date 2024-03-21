@@ -2,8 +2,8 @@
 
 #include "Server.h"
 
-volatile char* key[numkeys][keyLen];
-volatile char message_cipher[keyLen];
+char key[numkeys][keyLen];
+char message_cipher[keyLen];
 
 
 int Create_DataBase_IP() {
@@ -192,15 +192,15 @@ int Initialize(){
     if(Create_DataBase_Data()==0){return 0;}
 
     char *filename = "Encryption_keys.txt";
-    char dummy[keyLen];
     FILE *fp = fopen(filename, "r");
     if (fp == NULL) {
         printf("Error: could not open file %s", filename);
         return 0;
     }
     for(int i=0;i<numkeys;i++){
-        fgets((char *)key[i],keyLen,fp);
-        fgets(dummy,keyLen,fp);
+        for(int j=0;j<keyLen;j++) {
+            key[i][j] = fgetc(fp);
+        }
     }
     fclose(fp);
     printf("Keys upload completed\n");
@@ -220,25 +220,25 @@ int XORCipher(char* data, bool send, int ID, char type) {
         message_cipher[strlen(data)+1]='\0';
         fill_dummy(strlen(data)+2,(char*)message_cipher);
         
-        //if(counter==numkeys-1){counter = 0;}
-        //else {counter++;}
+        if(counter==numkeys-1){counter = 0;}
+        else {counter++;}
 
-        for (int i=1;i<keyLen;++i) {
-            message_cipher[i] = message_cipher[i] ^ (long int)key[counter][i-1];
+        for (int i=1;i<keyLen;i++) {
+            message_cipher[i] = message_cipher[i] ^ key[counter][i-1];
         }
 	}
 
     else {
         for(int i=1;i<keyLen;i++) {message_cipher[i-1]=data[i];}
 
-        for (int i=0;i<keyLen-1;++i) {
-            message_cipher[i] = message_cipher[i] ^ (long int)key[counter][i];
+        for (int i=0;i<keyLen-1;i++) {
+            message_cipher[i] = message_cipher[i] ^ key[counter][i];
             if(message_cipher[i]=='\0') {break;}
         }
     }	
 
-    //if(counter==numkeys-1){counter = 0;}
-    //else {counter++;}
+    if(counter==numkeys-1){counter = 0;}
+    else {counter++;}
 
     return counter;
 }
@@ -323,7 +323,6 @@ int main() {
         memset((char*) message_cipher, 0, sizeof(message_cipher));
         memset(buffer, 0, sizeof(buffer));
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len); 
-        printf("%s\n",buffer);
         
         //! 0 is new connection
         //! 1 is ID checkup on Database
@@ -352,12 +351,12 @@ int main() {
 
             case '1':
                 if (ID>0) {
-                    //printf("\nSTRING: %s\n",buffer);
                     XORCipher(buffer,false,ID,'1');
                     printf("Client (nº%d) %s:%d -> %s\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
                     key_counter = XORCipher((char*)message_ID,true,ID,'1');
                     
-                    sendto(sockfd, (char*)message_ID, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
+                    XORCipher(message_ID,true,ID,'1');
+                    sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if(UpdateCounter_DataBase(key_counter,ID)==0) {return 1;};
                 }
                 break;

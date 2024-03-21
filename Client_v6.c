@@ -16,7 +16,7 @@
 #define numkeys  500
 
 int counter;
-char* key[numkeys][keyLen];
+char key[numkeys][keyLen];
 char message_cipher[keyLen];
 
 int Initialize(){
@@ -28,8 +28,9 @@ int Initialize(){
         return 1;
     }
     for(int i=0;i<numkeys;i++){
-        fgets((char *)key[i],keyLen,fp);
-        fgets(dummy,keyLen,fp);
+        for(int j=0;j<keyLen;j++) {
+            key[i][j] = fgetc(fp);
+        }
     }
     fclose(fp);
     printf("\nKeys upload completed\n");
@@ -50,14 +51,14 @@ void XORCipher(char* data, bool send, char type) {
         fill_dummy(strlen(data)+2,(char*)message_cipher);
 
         for (int i=1;i<keyLen;++i) {
-            message_cipher[i] = message_cipher[i] ^ (long int)key[counter][i-1];
+            message_cipher[i] = message_cipher[i] ^ key[counter][i-1];
         }
     }
     else {
         for(int i=1;i<keyLen;i++) {message_cipher[i-1]=data[i];}
 
         for (int i=0;i<keyLen;++i) {
-            message_cipher[i] = message_cipher[i] ^ (long int)key[counter][i];
+            message_cipher[i] = message_cipher[i] ^ key[counter][i];
             if(message_cipher[i]=='\0') {break;}
         }
     }
