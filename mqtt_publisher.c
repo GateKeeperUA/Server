@@ -120,7 +120,7 @@ void Send_Data() {
 
         printf("Data sent temp for topic %d:%d hum:%d gas:%d\n",data[i].last_ID,data[i].last_temperature,data[i].last_humidity,data[i].last_gas);
         sprintf(publish,"%d %d %d",data[i].last_temperature,data[i].last_humidity,data[i].last_gas);
-        sprintf(topic,"DETI/%d",data[i].last_ID);
+        sprintf(topic,"DETI/room%d",data[i].last_ID);
         mosquitto_publish(mosq,NULL,topic,strlen(publish),publish,0,false);
     }
     printf("\n");
