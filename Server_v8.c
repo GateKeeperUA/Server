@@ -197,13 +197,16 @@ int Initialize(){
         printf("Error: could not open file %s", filename);
         return 0;
     }
-    for(int i=0;i<numkeys;i++){
+    char line[keyLen+1];
+    for(int i=0;fgets(line, keyLen+1, fp) != NULL;i++) {
         for(int j=0;j<keyLen;j++) {
-            key[i][j] = fgetc(fp);
+            key[i][j] = line[j];
         }
     }
+
     fclose(fp);
     printf("Keys upload completed\n");
+
     return 1;
 }
    
@@ -354,8 +357,7 @@ int main() {
                     XORCipher(buffer,false,ID,'1');
                     printf("Client (nº%d) %s:%d -> %s\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
                     key_counter = XORCipher((char*)message_ID,true,ID,'1');
-                    
-                    XORCipher(message_ID,true,ID,'1');
+
                     sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if(UpdateCounter_DataBase(key_counter,ID)==0) {return 1;};
                 }

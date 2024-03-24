@@ -27,9 +27,10 @@ int Initialize(){
         printf("Error: could not open file %s", filename);
         return 1;
     }
-    for(int i=0;i<numkeys;i++){
+    char line[keyLen+1];
+    for(int i=0;fgets(line, keyLen+1, fp) != NULL;i++) {
         for(int j=0;j<keyLen;j++) {
-            key[i][j] = fgetc(fp);
+            key[i][j] = line[j];
         }
     }
     fclose(fp);
