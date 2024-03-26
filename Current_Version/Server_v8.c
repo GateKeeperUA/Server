@@ -293,7 +293,7 @@ int main() {
     bool restart;
     char ID_[3];
     char* message_init="%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
-    char* message_ID = "In DataBase";
+    char* message_ID = "in database";
 
     if(Initialize()==0){return 1;}    
        
