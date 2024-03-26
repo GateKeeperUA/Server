@@ -17,7 +17,7 @@ int main() {
                 random = '"';
                 fputc(random, file_stm);
             }
-            else if(j==keyLen+1 && i<numKeys-2) {
+            else if(j==keyLen+1 && i<numKeys-1) {
                 random = ',';
                 fputc(random, file_stm);
             }
