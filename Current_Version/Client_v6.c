@@ -13,7 +13,7 @@
    
 #define PORT     5005
 #define keyLen   128
-#define numkeys  500
+#define numkeys  300
 
 int counter;
 char key[numkeys][keyLen];

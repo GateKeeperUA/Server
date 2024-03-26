@@ -38,6 +38,22 @@ int Create_DataBase_Data() {
     return 1;
 }
 
+int Create_DataBase_ID() {
+    char* err;
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+    if(sqlite3_open("SQLite/ID.db", &db)!=0) {
+        return 0;
+    }
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS ID(ID varchar(23),Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
+        printf("\nError %s\n",err);
+        return 0;
+    }
+    sqlite3_close(db);
+    printf("ID DataBase creation complete\n");
+    return 1;
+}
+
 int Find_in_DataBase(char *IP) {
     char* err;
     sqlite3* db;
@@ -113,24 +129,6 @@ int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, i
     return 1;
 }
 
-/*int Initialize_DataBase() {
-    char* err;
-    sqlite3* db;
-    sqlite3_stmt* stmt;
-    if(sqlite3_open("SQLite/Server.db", &db)!=0) {
-        return 0;
-    }
-
-    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
-    int find=0;
-    while(sqlite3_step(stmt) != SQLITE_DONE) {
-        find = sqlite3_column_int(stmt,0);
-    }
-    sqlite3_reset(stmt);
-    sqlite3_close(db);
-    return find+1;
-}*/
-
 int UpdateCounter_DataBase(int counter,int ID) {
     char* err;
     char query[100];
@@ -187,8 +185,63 @@ int ReadCounter_DataBase(int ID) {
     return find;    
 }
 
+int CheckID_DataBase(char* UID, int ID) {
+    char* err;
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+
+    if(sqlite3_open("SQLite/IP.db", &db)!=0) {
+        return 0;
+    }
+
+    sqlite3_prepare_v2(db,"select ID,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
+
+    int find_ID, permission;
+    while(sqlite3_step(stmt) != SQLITE_DONE) {
+        find_ID=sqlite3_column_int(stmt,0);
+        if(find_ID==ID){
+            permission=sqlite3_column_int(stmt,6);
+        }
+    }
+
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+
+
+    if(sqlite3_open("SQLite/ID.db", &db)!=0) {
+        return 0;
+    }
+
+    sqlite3_prepare_v2(db,"select ID,Permission from ID",-1,&stmt,NULL);
+
+    const unsigned char *find_UID="";
+    while(sqlite3_step(stmt) != SQLITE_DONE) {
+        find_UID = sqlite3_column_text(stmt,0);
+        if(strcmp(find_UID,UID)==0){
+            if(sqlite3_column_int(stmt,1)>=permission) {
+                goto ALLOWED;
+            }
+            else {
+                goto NOT_ALLOWED;
+            }
+            
+        }
+    }
+
+    NOT_ALLOWED:
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+    return 2;
+    
+    ALLOWED:
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+    return 1;    
+}
+
 int Initialize(){
     if(Create_DataBase_IP()==0){return 0;}
+    if(Create_DataBase_ID()==0){return 0;}
     if(Create_DataBase_Data()==0){return 0;}
 
     char *filename = "Encryption_keys.txt";
@@ -286,7 +339,7 @@ int receive_data(char* data, int ID) {
 }
 
 int main() {
-    int sockfd, ID, key_counter;
+    int sockfd, ID, key_counter, permission_UID;
     char buffer[keyLen];
     struct sockaddr_in servaddr, cliaddr;
     int len;    
@@ -294,6 +347,8 @@ int main() {
     char ID_[3];
     char* message_init="%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
     char* message_ID = "in database";
+    char* confirmation = "uid sent has permission to enter"; 
+    char* denial = "uid sent has not permission to enter";
 
     if(Initialize()==0){return 1;}    
        
@@ -355,8 +410,19 @@ int main() {
             case '1':
                 if (ID>0) {
                     XORCipher(buffer,false,ID,'1');
-                    printf("Client (nº%d) %s:%d -> %s\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
-                    key_counter = XORCipher((char*)message_ID,true,ID,'1');
+
+                    permission_UID = CheckID_DataBase(message_cipher,ID);
+                    if(permission_UID==0) {
+                        return 1;
+                    }
+                    else if(permission_UID==1){
+                        printf("Client (nº%d) %s:%d -> %s can enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
+                        key_counter = XORCipher(confirmation,true,ID,'1');
+                    }
+                    else{
+                        printf("Client (nº%d) %s:%d -> %s can't enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
+                        key_counter = XORCipher(denial,true,ID,'1'); 
+                    }
 
                     sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if(UpdateCounter_DataBase(key_counter,ID)==0) {return 1;};
