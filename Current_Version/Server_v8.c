@@ -97,7 +97,7 @@ int Add_to_DataBase_IP(char* IP, int ID, int permission) {
 
     for(int i=0;i<strlen(IP);i++){if(IP[i]=='.')IP[i]=',';}
     char query[100];
-    sprintf(query,"insert into IP VALUES(%d,%s,%ld,%d);",ID,IP,0,permission);
+    sprintf(query,"insert into IP VALUES(%d,%s,%d,%d);",ID,IP,0,permission);
     //! 0 - not a student
     //! 1 - DETI setudent
     //! 2 - DETI worker
