@@ -13,3 +13,4 @@
 #define PORT    5005
 #define keyLen  128
 #define numkeys 300
+#define IP      "192.168.1.86"

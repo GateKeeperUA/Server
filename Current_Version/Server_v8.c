@@ -310,20 +310,20 @@ int receive_data(char* data, int ID) {
             switch(j) {
                 case 0:
                     temperature = atoi(aux);
-                    printf("%dºC ",temperature);
+                    printf("%.2fºC ",(float)temperature/100);
                     break;
                 case 1:
                     pressure = atoi(aux);
-                    printf("%dhPA ",pressure);
+                    printf("%.2fhPA ",(float)pressure/100);
                     
                     break;
                 case 2:
                     humidity = atoi(aux);
-                    printf("%d%% ",humidity);
+                    printf("%.2f%% ",(float)humidity/1000);
                     break;
                 case 3:
                     gas = atoi(aux);
-                    printf("%dgas\n",gas);
+                    printf("%dIAQ\n",gas);
                     break;
             }
             j++;
@@ -347,8 +347,8 @@ int main() {
     char ID_[3];
     char* message_init="%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
     char* message_ID = "in database";
-    char* confirmation = "uid sent has permission to enter"; 
-    char* denial = "uid sent has not permission to enter";
+    char* confirmation = "4jqz484yl94neddq0twxugnnyty6imjyc5zdeyyizl636mvk48pi1as8fnyc01a9lj3mamlp4jdcmjfviw48uv7fv4mv52gq75atzpus853ov2n8phy59cy3a77wp"; 
+    char* denial = "931ghxbwti34tq3fzyc0wqxjbq92v9hrjlzndm3xdbgjc2131ouyxxx7dm4rt7tzbd0x9ij6lq5wbm2n1nq0x7ikoavivpu34sditd3i3opuxsfi2r1gzkojgjo96";
 
     if(Initialize()==0){return 1;}    
        
@@ -363,7 +363,7 @@ int main() {
        
     // Filling server information
     servaddr.sin_family    = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = inet_addr("192.168.1.86");
+    servaddr.sin_addr.s_addr = inet_addr(IP);
     servaddr.sin_port = htons(PORT);
    
     // Bind the socket with the server address
