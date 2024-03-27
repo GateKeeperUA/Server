@@ -363,7 +363,7 @@ int main() {
        
     // Filling server information
     servaddr.sin_family    = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = inet_addr(IP);
+    servaddr.sin_addr.s_addr = inet_addr(IP_server);
     servaddr.sin_port = htons(PORT);
    
     // Bind the socket with the server address
