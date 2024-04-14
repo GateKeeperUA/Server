@@ -5,7 +5,6 @@
 char key[numkeys][keyLen];
 char message_cipher[keyLen];
 
-
 int Create_DataBase_IP() {
     char* err;
     sqlite3* db;
@@ -13,7 +12,7 @@ int Create_DataBase_IP() {
     if (sqlite3_open("SQLite/IP.db", &db)!=0) {
         return 0;
     }
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS IP(Room INT,IP1 varchar(3),IP2 varchar(3),IP3 varchar(3),IP4 varchar(3),Counter INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS IP(Serial TEXT,Room INT,IP TEXT,Counter INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
     }
@@ -45,7 +44,7 @@ int Create_DataBase_ID() {
     if(sqlite3_open("SQLite/ID.db", &db)!=0) {
         return 0;
     }
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS ID(UID varchar(23),NMEC INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS ID(UID TEXT,NMEC INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
     }
@@ -61,7 +60,7 @@ int Create_DataBase_Log() {
     if(sqlite3_open("SQLite/Log.db", &db)!=0) {
         return 0;
     }
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS LOG(Room INT,NMEC INT,Hour INT,Minute INT,Second INT,Day INT,Month INT,Year INT);",NULL,NULL,&err) != SQLITE_OK) {
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS LOG(Room INT,NMEC INT,Date TEXT);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
     }
@@ -70,7 +69,7 @@ int Create_DataBase_Log() {
     return 1;
 }
 
-int Find_IP_in_DataBase(char *IP) {
+int Find_IP_in_DataBase_IP(char *IP) {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
@@ -78,33 +77,23 @@ int Find_IP_in_DataBase(char *IP) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Room,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
-    const unsigned char *aux;
-    char *findIP;
-    int find=0;
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
+    const unsigned char *findIP;
+    int room=0;
     while(sqlite3_step(stmt) != SQLITE_DONE) {
-        aux = sqlite3_column_text(stmt,1);
-        findIP = (char*)aux;
-        strcat(findIP,".");
-        aux = sqlite3_column_text(stmt,2);
-        strcat(findIP,aux);
-        strcat(findIP,".");
-        aux = sqlite3_column_text(stmt,3);
-        strcat(findIP,aux);
-        strcat(findIP,".");
-        aux = sqlite3_column_text(stmt,4);
-        strcat(findIP,aux);
+        findIP = sqlite3_column_text(stmt,2);
         if(strcmp(findIP,IP)==0){
-            find = sqlite3_column_int(stmt,0);
+            room = sqlite3_column_int(stmt,1);
             break;
         }
     }
     sqlite3_reset(stmt);
     sqlite3_close(db);
-    return find;
+    return room;
 }
 
-int Find_ID_in_DataBase(int ID) {
+int Find_Serial_in_DataBase_IP(char* serial) {
+    int room=0;
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
@@ -112,29 +101,29 @@ int Find_ID_in_DataBase(int ID) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Room,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
-    int find=0;
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
+    const unsigned char* find;
     while(sqlite3_step(stmt) != SQLITE_DONE) {
-        find = sqlite3_column_int(stmt,0);
-        if(find==ID){
+        find = sqlite3_column_text(stmt,0);
+        if(strcmp(find,serial)==0){
+            room = sqlite3_column_int(stmt,1);
             break;
         }
     }
     sqlite3_reset(stmt);
     sqlite3_close(db);
-    return find;
+    return room;
 }
 
-int Add_to_DataBase_IP(char* IP, int room, int permission) {
+int Add_to_DataBase_IP(char* serial_num,char* IP, int room) {
     char* err;
     sqlite3* db;
     if(sqlite3_open("SQLite/IP.db", &db)!=0) {
         return 0;
     }
 
-    for(int i=0;i<strlen(IP);i++){if(IP[i]=='.')IP[i]=',';}
     char query[100];
-    sprintf(query,"insert into IP VALUES(%d,%s,%d,%d);",room,IP,0,permission);
+    sprintf(query,"insert into IP VALUES('%s',%d,'%s',%d,%d);",serial_num,room,IP,0,3);
     //! 0 - not a DETI student
     //! 1 - DETI setudent
     //! 2 - DETI worker
@@ -161,10 +150,9 @@ int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, i
     while(sqlite3_step(stmt) != SQLITE_DONE) {
         find = sqlite3_column_int(stmt,4);
         if(find==room){
-            sprintf(query,"UPDATE DATA SET Temperature = %d, Pressure = %d, Humidity = %d, Gas = %d Where ID = %d",temperature,pressure,humidity,gas,room);
+            sprintf(query,"UPDATE DATA SET Temperature = %d, Pressure = %d, Humidity = %d, Gas = %d Where Room = %d",temperature,pressure,humidity,gas,room);
             goto DONE;
         }
-        printf("a\n");
     }
     sqlite3_reset(stmt);
 
@@ -179,34 +167,7 @@ int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, i
     return 1;
 }
 
-int Match_Month(char* month) {
-    if (strcmp(month,"Jan")==0)
-        return 1;
-    else if (strcmp(month,"Feb")==0)
-        return 2;
-    else if (strcmp(month,"Mar")==0)
-        return 3;
-    else if (strcmp(month,"Apr")==0)
-        return 4;
-    else if (strcmp(month,"May")==0)
-        return 5;
-    else if (strcmp(month,"Jun")==0)
-        return 6;
-    else if (strcmp(month,"Jul")==0)
-        return 7;
-    else if (strcmp(month,"Ago")==0)
-        return 8;
-    else if (strcmp(month,"Sep")==0)
-        return 9;
-    else if (strcmp(month,"Oct")==0)
-        return 10;
-    else if (strcmp(month,"Nov")==0)
-        return 11;
-    else if (strcmp(month,"Dec")==0)
-        return 12;    
-}
-
-int Add_to_DataBase_Log(int Room, int NMEC) {
+int Add_to_DataBase_Log(int room, int NMEC) {
     int month_,space_counter = 0;
     char hour[2], minute[2], second[2], day[2], month[3], year[4];
     char* err;
@@ -216,51 +177,9 @@ int Add_to_DataBase_Log(int Room, int NMEC) {
         return 0;
     }
     time(&t);
-    char* t_string = ctime(&t);
-    for(int i=0;i<strlen(t_string);i++) {
-        switch(space_counter) {
-            case 1:
-                for(int j=0;t_string[i]!=' ';j++,i++) {
-                    month[j] = t_string[i];
-                }
-                break;
-            case 2:
-                for(int j=0;t_string[i]!=' ';j++,i++) {
-                    day[j] = t_string[i];
-                }
-                break;
-
-            case 3:
-                for(int j=0;t_string[i]!=':';j++,i++) {
-                    hour[j] = t_string[i];
-                }
-                break;
-
-            case 4:
-                for(int j=0;t_string[i]!=':';j++,i++) {
-                    minute[j] = t_string[i];
-                }
-                break;
-            case 5:
-                for(int j=0;t_string[i]!=' ';j++,i++) {
-                    second[j] = t_string[i];
-                }
-                break;
-            case 6:
-                for(int j=0;t_string[i]!='\0';j++,i++) {
-                    year[j] = t_string[i];
-                }
-                break;
-        }
-        if(t_string[i]==' ' || t_string[i]==':'){
-            space_counter++;
-        }
-    }
-    sprintf(month,"%c%c%c",month[0],month[1],month[2]);
-    month_ = Match_Month(month);
     char query[100];
-    sprintf(query,"insert into Log VALUES(%d,%d,%d,%d,%d,%d,%d,%d);",Room,NMEC,atoi(hour),atoi(minute),atoi(second),atoi(day),month_,atoi(year));
 
+    sprintf(query,"insert into Log VALUES(%d,%d,'%s');",room,NMEC,ctime(&t));
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
@@ -287,7 +206,7 @@ int Update_Counter_in_DataBase_IP(int counter,int room) {
     return 1;
 }
 
-int Update_Permission_in_DataBase_IP(int permission, int room, char IP[20]) {
+int Update_Info_in_DataBase_IP(char* serial, int room, char* IP) {
     char IP_[4];
     int IP1=0,IP2=0,IP3=0;
     char* err;
@@ -297,51 +216,17 @@ int Update_Permission_in_DataBase_IP(int permission, int room, char IP[20]) {
     if(sqlite3_open("SQLite/IP.db", &db)!=0) {
         return 0;
     }
-    sprintf(query,"UPDATE IP SET Permission = %d Where Room = %d",permission,room);
+    sprintf(query,"UPDATE IP SET room = %d Where Serial = '%s'",room,serial);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
     }
-    memset(IP_,0,strlen(IP_));
-    for(int i=0;IP[i]!='.';i++){
-        IP_[i]=IP[i];
-        IP1++;
-    }
-    sprintf(query,"UPDATE IP SET IP1 = %s Where Room = %d",IP_,room);
+    sprintf(query,"UPDATE IP SET IP = '%s' Where Serial = '%s'",IP,serial);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
     }
-    memset(IP_,0,strlen(IP_));
-    for(int i=IP1+1;IP[i]!='.';i++){
-        IP_[i-IP1-1]=IP[i];
-        IP2++;
-    }
-    sprintf(query,"UPDATE IP SET IP2 = %s Where Room = %d",IP_,room);
-    if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
-    }
-    memset(IP_,0,strlen(IP_));
-    for(int i=IP1+IP2+2;IP[i]!='.';i++){
-        IP_[i-IP1-IP2-2]=IP[i];
-        IP3++;
-    }
-    sprintf(query,"UPDATE IP SET IP3 = %s Where Room = %d",IP_,room);
-    if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
-    }
-    memset(IP_,0,strlen(IP_));
-    for(int i=IP1+IP2+IP3+3;IP[i]!='.';i++){
-        IP_[i-IP1-IP2-IP3-3]=IP[i];
-    }
-    sprintf(query,"UPDATE IP SET IP4 = %s Where Room = %d",IP_,room);
-    if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
-    }
-    sprintf(query,"UPDATE IP SET IP4 = %s Where Room = %d",IP_,room);
+    sprintf(query,"UPDATE IP SET Counter = %d Where Serial = '%s'",0,serial);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
@@ -352,6 +237,7 @@ int Update_Permission_in_DataBase_IP(int permission, int room, char IP[20]) {
 }
 
 int Read_Counter_in_DataBase_IP(int room) {
+    int counter;
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
@@ -359,16 +245,16 @@ int Read_Counter_in_DataBase_IP(int room) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Room,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
 
-    int find;
+    
     do {
         sqlite3_step(stmt);
-    }while(sqlite3_column_int(stmt,0)!=room);
-    find = sqlite3_column_int(stmt,5);
+    }while(sqlite3_column_int(stmt,1)!=room);
+    counter = sqlite3_column_int(stmt,3);
     sqlite3_reset(stmt);
     sqlite3_close(db);
-    return find;    
+    return counter;    
 }
 
 int Check_UID_in_DataBase_ID(char* UID, int room) {
@@ -380,13 +266,13 @@ int Check_UID_in_DataBase_ID(char* UID, int room) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Room,IP1,IP2,IP3,IP4,Counter,Permission from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
 
     int find_room, permission;
     while(sqlite3_step(stmt) != SQLITE_DONE) {
-        find_room=sqlite3_column_int(stmt,0);
+        find_room=sqlite3_column_int(stmt,1);
         if(find_room==room){
-            permission=sqlite3_column_int(stmt,6);
+            permission=sqlite3_column_int(stmt,4);
         }
     }
 
@@ -478,8 +364,8 @@ void fill_dummy(int start, char* data) {
     data[keyLen-1]='\0';
 }
    
-int XORCipher(char* data, bool send, int ID, char type) {
-    int counter = Read_Counter_in_DataBase_IP(ID);
+int XORCipher(char* data, bool send, int room, char type) {
+    int counter = Read_Counter_in_DataBase_IP(room);
     if(send==true){
         message_cipher[0] = type;
         for(int i=0;i<strlen(data);i++) {message_cipher[i+1]=data[i];}
@@ -509,7 +395,7 @@ int XORCipher(char* data, bool send, int ID, char type) {
     return counter;
 }
 
-int Receive_Data(char* data, int ID) {
+int Receive_Data(char* data, int room) {
     int temperature=0,pressure=0,humidity=0,gas=0,i=1,j=0,k=0;
     char aux[10];
     for(int i=1;data[i-1]!='\0';i++,k++) {
@@ -542,18 +428,18 @@ int Receive_Data(char* data, int ID) {
         }
     }
 
-    if(Add_to_DataBase_Data(temperature,pressure,humidity,gas,ID)==0) {return 0;}
+    if(Add_to_DataBase_Data(temperature,pressure,humidity,gas,room)==0) {return 0;}
     
     return 1;
 }
 
 int main() {
-    int sockfd, ID, key_counter, permission_UID;
+    int sockfd, find, room, key_counter, permission_UID, nmec;
     char buffer[keyLen];
     struct sockaddr_in servaddr, cliaddr;
     int len;    
     bool restart;
-    char ID_[3];
+    char serial_num[6], room_[3];
     char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
     char* confirmation = "4jqz484yl94neddq0twxugnnyty6imjyc5zdeyyizl636mvk48pi1as8fnyc01a9lj3mamlp4jdcmjfviw48uv7fv4mv52gq75atzpus853ov2n8phy59cy3a77wp"; 
     char* denial = "931ghxbwti34tq3fzyc0wqxjbq92v9hrjlzndm3xdbgjc2131ouyxxx7dm4rt7tzbd0x9ij6lq5wbm2n1nq0x7ikoavivpu34sditd3i3opuxsfi2r1gzkojgjo96";
@@ -588,64 +474,69 @@ int main() {
     while(1){
         memset((char*) message_cipher, 0, sizeof(message_cipher));
         memset(buffer, 0, sizeof(buffer));
+        memset(serial_num,0,sizeof(serial_num));
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len); 
         
         //! 0 is new connection
-        //! 1 is ID checkup on Database
+        //! 1 is UID checkup on Database
         //! 2 is temperature data
         //! 9 is emergency
 
         
         switch (buffer[0]){
             case '0':
-                sprintf(ID_,"%c%c%c",buffer[1],buffer[2],buffer[3]);
-                ID = Find_ID_in_DataBase(atoi(ID_));
-                for(int i=0;i<keyLen-5;i++) {if(buffer[i+5]!=message_init[i]) {goto NOT_RESET;}}
+                for(int i=1;i<7;i++){
+                    sprintf(serial_num,"%s%c",serial_num,buffer[i]);
+                }
+                sprintf(room_,"%c%c%c",buffer[7],buffer[8],buffer[9]);
+                room = atoi(room_);
+                find = Find_Serial_in_DataBase_IP(serial_num);
+                
+                for(int i=0;i<keyLen-10;i++) {if(buffer[i+10]!=message_init[i]) {goto NOT_RESET;}}
                     sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-                    if (ID==0){
-                        if(Add_to_DataBase_IP(inet_ntoa(cliaddr.sin_addr),atoi(ID_),buffer[4]-'0')==0){return 1;};
-                        printf("Client (nº%d) %s:%d -> Has entered\n", atoi(ID_), inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                    if (find==0){
+                        if(Add_to_DataBase_IP(serial_num,inet_ntoa(cliaddr.sin_addr),room)==0){return 1;};
+                        printf("Client (nº%d) %s:%d -> Has entered\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     else {
-                        if(Update_Counter_in_DataBase_IP(0,ID)==0) {return 1;}
-                        if(Update_Permission_in_DataBase_IP(buffer[4]-'0',ID,inet_ntoa(cliaddr.sin_addr))==0) {return 1;}    
-                        printf("Client (nº%d) %s:%d -> Has entered\n", atoi(ID_), inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        if(Update_Info_in_DataBase_IP(serial_num,room,inet_ntoa(cliaddr.sin_addr))==0) {return 1;}    
+                        printf("Client (nº%d) %s:%d -> Has entered\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                                 
                 break;
                 NOT_RESET:
-                sendto(sockfd, "Not initialized", 15, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
+                sendto(sockfd, denial, strlen(denial), MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                 break;
 
             case '1':
-                ID = Find_IP_in_DataBase(inet_ntoa(cliaddr.sin_addr));
-                if (ID>0) {
-                    XORCipher(buffer,false,ID,'1');
-                    permission_UID = Check_UID_in_DataBase_ID(message_cipher,ID);
+                room = Find_IP_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
+                if (room>0) {
+                    XORCipher(buffer,false,room,'1');
+                    permission_UID = Check_UID_in_DataBase_ID(message_cipher,room);
+                    nmec = Read_NMEC_in_DataBase_ID(message_cipher);
                     if(permission_UID==0) {
                         return 1;
                     }
                     else if(permission_UID==1){
-                        printf("Client (nº%d) %s:%d -> %s can enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
-                        key_counter = XORCipher(confirmation,true,ID,'1');
-
-                        if(Add_to_DataBase_Log(ID,107465)==0){return 1;}
+                        printf("Client (nº%d) %s:%d -> %s can enter\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
+                        key_counter = XORCipher(confirmation,true,room,'1');
                     }
                     else{
-                        printf("Client (nº%d) %s:%d -> %s can't enter\n", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
-                        key_counter = XORCipher(denial,true,ID,'1'); 
+                        printf("Client (nº%d) %s:%d -> %s can't enter\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
+                        key_counter = XORCipher(denial,true,room,'1'); 
                     }
 
                     sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-                    if(Update_Counter_in_DataBase_IP(key_counter,ID)==0) {return 1;};
+                    if(Update_Counter_in_DataBase_IP(key_counter,room)==0) {return 1;};
+                    if(Add_to_DataBase_Log(room,nmec)==0){return 1;}
                 }
                 break;
 
             case '2':
-                ID = Find_IP_in_DataBase(inet_ntoa(cliaddr.sin_addr));
-                if (ID>0) {
-                    printf("Data in room of client (nº%d) %s:%d is ", ID, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
-                    if(Receive_Data(buffer,ID)==0) {return 1;}
+                room = Find_IP_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
+                if (room>0) {
+                    printf("Data in room of client (nº%d) %s:%d is ", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                    if(Receive_Data(buffer,room)==0) {return 1;}
                 }
         }
     }

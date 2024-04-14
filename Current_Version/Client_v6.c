@@ -81,11 +81,11 @@ int main() {
     struct sockaddr_in servaddr;
     int len, try_connect=0;
     char option[2];
-    char room[5];
+    char room[4];
     char message_init_[keyLen];
     char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
     char* confirmation = "4jqz484yl94neddq0twxugnnyty6imjyc5zdeyyizl636mvk48pi1as8fnyc01a9lj3mamlp4jdcmjfviw48uv7fv4mv52gq75atzpus853ov2n8phy59cy3a77wp"; 
-    char* serial_num = "";
+    char* serial_num = "301f26";
     
 
    if(Initialize()==1){return 1;}
@@ -103,9 +103,9 @@ int main() {
     servaddr.sin_port = htons(PORT);
     servaddr.sin_addr.s_addr = inet_addr("192.168.1.86");
 
-    printf("Choose room number (4 numbers):\n");
-    fgets(room,5,stdin);
-    sprintf(message_init_,"0%c%c%c%c%s",room[0],room[1],room[2],room[3],message_init);
+    printf("Choose room number (3 numbers):\n");
+    fgets(room,4,stdin);
+    sprintf(message_init_,"0%s%c%c%c%s",serial_num,room[0],room[1],room[2],message_init);
 
 
     CONNECT:
@@ -117,7 +117,7 @@ int main() {
     sendto(sockfd, message_init_, keyLen, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
     sleep(1);
     recvfrom(sockfd, buffer, keyLen, MSG_DONTWAIT, (struct sockaddr *) &servaddr, &len);
-    for(int i=0;i<keyLen-5;i++) {if(buffer[i]!=message_init_[i+5]) {goto CONNECT;}}
+    for(int i=0;i<keyLen-10;i++) {if(buffer[i]!=message_init_[i+10]) {goto CONNECT;}}
 
     while(1){
         memset(message, 0, sizeof(message));
