@@ -69,7 +69,7 @@ void XORCipher(char* data, bool send, char type) {
 }
 
 void send_temperature() {
-    sprintf((char*)message_cipher,"2%d %d %d %d \0",1755,103322,7065,4);
+    sprintf((char*)message_cipher,"2%d %d %d %d \0",1755,103322,70650,4);
     fill_dummy(strlen((char*) message_cipher)+1,(char*)message_cipher);
 }
 
@@ -82,7 +82,10 @@ int main() {
     int len, try_connect=0;
     char option[2];
     char room[5];
-    char message_init[keyLen];
+    char message_init_[keyLen];
+    char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
+    char* confirmation = "4jqz484yl94neddq0twxugnnyty6imjyc5zdeyyizl636mvk48pi1as8fnyc01a9lj3mamlp4jdcmjfviw48uv7fv4mv52gq75atzpus853ov2n8phy59cy3a77wp"; 
+    char* serial_num = "";
     
 
    if(Initialize()==1){return 1;}
@@ -100,9 +103,9 @@ int main() {
     servaddr.sin_port = htons(PORT);
     servaddr.sin_addr.s_addr = inet_addr("192.168.1.86");
 
-    printf("Choose room number and permission (4 numbers):\n");
+    printf("Choose room number (4 numbers):\n");
     fgets(room,5,stdin);
-    sprintf(message_init,"0%c%c%c%c%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-",room[0],room[1],room[2],room[3]);
+    sprintf(message_init_,"0%c%c%c%c%s",room[0],room[1],room[2],room[3],message_init);
 
 
     CONNECT:
@@ -111,10 +114,10 @@ int main() {
         printf("Connection failed\n");
         return 1;
     }
-    sendto(sockfd, message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+    sendto(sockfd, message_init_, keyLen, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
     sleep(1);
     recvfrom(sockfd, buffer, keyLen, MSG_DONTWAIT, (struct sockaddr *) &servaddr, &len);
-    for(int i=0;i<keyLen-5;i++) {if(buffer[i]!=message_init[i+5]) {goto CONNECT;}}
+    for(int i=0;i<keyLen-5;i++) {if(buffer[i]!=message_init_[i+5]) {goto CONNECT;}}
 
     while(1){
         memset(message, 0, sizeof(message));
@@ -130,14 +133,21 @@ int main() {
 
         switch(option[0]) {
             case '1':
-                sprintf(message,"[ID]");
+                sprintf(message,"05af6486");
                 XORCipher(message,true,'1');
                 sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
                 
                 recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, (struct sockaddr *) &servaddr, &len);
 
                 XORCipher(buffer,false,'1');
-                printf("Server: %s\n", message_cipher);
+
+                if(!strcmp(message_cipher,confirmation)) {
+                    printf("Server: Can enter\n");
+                }
+                else {
+                    printf("Server: Can't enter\n");
+                }
+                
                 break;
             case '2':
                 send_temperature();

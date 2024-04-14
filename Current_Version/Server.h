@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <sqlite3.h>
 #include <math.h>
+#include <time.h>
+#include <ctype.h>
    
 #define PORT    5005
 #define keyLen  128
