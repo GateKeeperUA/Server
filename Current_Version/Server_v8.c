@@ -4,6 +4,9 @@
 
 char key[numkeys][keyLen];
 char message_cipher[keyLen];
+struct sockaddr_in servaddr, cliaddr;
+int sockfd;
+char* emergency_message = "9Emergency";
 
 int Create_DataBase_IP() {
     char* err;
@@ -12,8 +15,8 @@ int Create_DataBase_IP() {
     if (sqlite3_open("SQLite/IP.db", &db)!=0) {
         return 0;
     }
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS IP(Serial TEXT,Room INT,IP TEXT,Counter INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS IP(Serial TEXT,Room INT,IP TEXT,Port INT,Counter INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
+        printf("\nError creating IP %s\n",err);
         return 0;
     }
     sqlite3_close(db);
@@ -29,7 +32,7 @@ int Create_DataBase_Data() {
         return 0;
     }
     if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS Data(Temperature INT,Pressure INT,Humidity INT,Gas INT,Room INT);",NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
+        printf("\nError creating Data%s\n",err);
         return 0;
     }
     sqlite3_close(db);
@@ -45,7 +48,7 @@ int Create_DataBase_ID() {
         return 0;
     }
     if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS ID(UID TEXT,NMEC INT,Permission INT);",NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
+        printf("\nError creating ID %s\n",err);
         return 0;
     }
     sqlite3_close(db);
@@ -61,7 +64,7 @@ int Create_DataBase_Log() {
         return 0;
     }
     if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS LOG(Room INT,NMEC INT,Date TEXT);",NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
+        printf("\nError creating Log %s\n",err);
         return 0;
     }
     sqlite3_close(db);
@@ -77,7 +80,7 @@ int Find_IP_in_DataBase_IP(char *IP) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
     const unsigned char *findIP;
     int room=0;
     while(sqlite3_step(stmt) != SQLITE_DONE) {
@@ -101,7 +104,7 @@ int Find_Serial_in_DataBase_IP(char* serial) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
     const unsigned char* find;
     while(sqlite3_step(stmt) != SQLITE_DONE) {
         find = sqlite3_column_text(stmt,0);
@@ -115,7 +118,7 @@ int Find_Serial_in_DataBase_IP(char* serial) {
     return room;
 }
 
-int Add_to_DataBase_IP(char* serial_num,char* IP, int room) {
+int Add_to_DataBase_IP(char* serial_num, int room, char* IP,int port) {
     char* err;
     sqlite3* db;
     if(sqlite3_open("SQLite/IP.db", &db)!=0) {
@@ -123,15 +126,17 @@ int Add_to_DataBase_IP(char* serial_num,char* IP, int room) {
     }
 
     char query[100];
-    sprintf(query,"insert into IP VALUES('%s',%d,'%s',%d,%d);",serial_num,room,IP,0,3);
+    sprintf(query,"insert into IP VALUES('%s',%d,'%s',%d,%d,%d);",serial_num,room,IP,port,0,3);
     //! 0 - not a DETI student
     //! 1 - DETI setudent
     //! 2 - DETI worker
     //! 3 - admin
 
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
+        printf("\nError adding info %s\n",err);
+        if(strcmp(err,"disk I/O error")!=0){
+            return 0;
+        }  
     }
     sqlite3_close(db);
     return 1;
@@ -151,11 +156,15 @@ int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, i
         find = sqlite3_column_int(stmt,4);
         if(find==room){
             sprintf(query,"UPDATE DATA SET Temperature = %d, Pressure = %d, Humidity = %d, Gas = %d Where Room = %d",temperature,pressure,humidity,gas,room);
+            sqlite3_reset(stmt);
+            if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
+                printf("\nError %s\n",err);
+                return 0;
+            }
             goto DONE;
         }
     }
     sqlite3_reset(stmt);
-
     sprintf(query,"insert into Data VALUES(%d,%d,%d,%d,%d);",temperature,pressure,humidity,gas,room);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
@@ -199,40 +208,32 @@ int Update_Counter_in_DataBase_IP(int counter,int room) {
 
     sprintf(query,"UPDATE IP SET Counter = %d Where Room = %d",counter,room);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
+        printf("\nError updating counter %s\n",err);
+        if(strcmp(err,"disk I/O error")!=0){
+            return 0;
+        }  
     }
     sqlite3_close(db);
     return 1;
 }
 
-int Update_Info_in_DataBase_IP(char* serial, int room, char* IP) {
+int Update_Info_in_DataBase_IP(char* serial, int room, char* IP, int port) {
     char IP_[4];
     int IP1=0,IP2=0,IP3=0;
     char* err;
     char query[100];
     sqlite3* db;
-    sqlite3_stmt* stmt;
     if(sqlite3_open("SQLite/IP.db", &db)!=0) {
         return 0;
     }
-    sprintf(query,"UPDATE IP SET room = %d Where Serial = '%s'",room,serial);
+    sprintf(query,"UPDATE IP SET Room = %d, IP = '%s', Port = %d, Counter = %d Where Serial = '%s'",room,IP,port,0,serial);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
-    }
-    sprintf(query,"UPDATE IP SET IP = '%s' Where Serial = '%s'",IP,serial);
-    if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
-    }
-    sprintf(query,"UPDATE IP SET Counter = %d Where Serial = '%s'",0,serial);
-    if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
-        printf("\nError %s\n",err);
-        return 0;
+        printf("\nError updating info %s\n",err);
+        if(strcmp(err,"disk I/O error")!=0){
+            return 0;
+        }  
     }
     sqlite3_close(db);
-
     return 1;
 }
 
@@ -245,13 +246,11 @@ int Read_Counter_in_DataBase_IP(int room) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
-
-    
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
     do {
         sqlite3_step(stmt);
     }while(sqlite3_column_int(stmt,1)!=room);
-    counter = sqlite3_column_int(stmt,3);
+    counter = sqlite3_column_int(stmt,4);
     sqlite3_reset(stmt);
     sqlite3_close(db);
     return counter;    
@@ -266,13 +265,13 @@ int Check_UID_in_DataBase_ID(char* UID, int room) {
         return 0;
     }
 
-    sqlite3_prepare_v2(db,"select Serial,Room,IP,Counter,Permission from IP",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
 
     int find_room, permission;
     while(sqlite3_step(stmt) != SQLITE_DONE) {
         find_room=sqlite3_column_int(stmt,1);
         if(find_room==room){
-            permission=sqlite3_column_int(stmt,4);
+            permission=sqlite3_column_int(stmt,5);
         }
     }
 
@@ -331,6 +330,8 @@ int Read_NMEC_in_DataBase_ID(char* UID) {
             
         }
     }
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
     return NMEC;    
 }
 
@@ -428,15 +429,35 @@ int Receive_Data(char* data, int room) {
         }
     }
 
-    if(Add_to_DataBase_Data(temperature,pressure,humidity,gas,room)==0) {return 0;}
-    
+    if(Add_to_DataBase_Data(temperature,pressure,humidity,gas,room)==0) {return 0;}   
     return 1;
 }
 
+void Send_Emergency(){
+    char* err;
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+    int NMEC;
+
+    RETRY:
+    if(sqlite3_open("SQLite/IP.db", &db)!=0) {
+        goto RETRY;
+    }
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
+    while(sqlite3_step(stmt) != SQLITE_DONE) {
+        cliaddr.sin_family      = AF_INET;
+        cliaddr.sin_addr.s_addr = inet_addr(sqlite3_column_text(stmt,2));
+        cliaddr.sin_port        = htons(sqlite3_column_int(stmt,3));
+        sendto(sockfd, emergency_message, strlen(emergency_message), MSG_CONFIRM, (const struct sockaddr *) &cliaddr, sizeof(cliaddr));
+    }
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+    printf("Emergency warning sent for every Room\n");
+}
+
 int main() {
-    int sockfd, find, room, key_counter, permission_UID, nmec;
+    int find, room, key_counter, permission_UID, nmec;
     char buffer[keyLen];
-    struct sockaddr_in servaddr, cliaddr;
     int len;    
     bool restart;
     char serial_num[6], room_[3];
@@ -495,11 +516,11 @@ int main() {
                 for(int i=0;i<keyLen-10;i++) {if(buffer[i+10]!=message_init[i]) {goto NOT_RESET;}}
                     sendto(sockfd, (char*)message_init, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if (find==0){
-                        if(Add_to_DataBase_IP(serial_num,inet_ntoa(cliaddr.sin_addr),room)==0){return 1;};
+                        if(Add_to_DataBase_IP(serial_num,room,inet_ntoa(cliaddr.sin_addr),htons(cliaddr.sin_port))==0){return 1;};
                         printf("Client (nº%d) %s:%d -> Has entered\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     else {
-                        if(Update_Info_in_DataBase_IP(serial_num,room,inet_ntoa(cliaddr.sin_addr))==0) {return 1;}    
+                        if(Update_Info_in_DataBase_IP(serial_num,room,inet_ntoa(cliaddr.sin_addr),htons(cliaddr.sin_port))==0) {return 1;}    
                         printf("Client (nº%d) %s:%d -> Has entered\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                                 
@@ -538,6 +559,10 @@ int main() {
                     printf("Data in room of client (nº%d) %s:%d is ", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     if(Receive_Data(buffer,room)==0) {return 1;}
                 }
+                break;
+
+            case '9':
+                Send_Emergency();
         }
     }
     return 0;
