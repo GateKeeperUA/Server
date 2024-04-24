@@ -75,7 +75,7 @@ void XORCipher(char* data, bool send, char type) {
 }
 
 void send_temperature() {
-    sprintf((char*)message_cipher,"2%d %d %d %d \0",1755,103322,70650,4);
+    sprintf((char*)message_cipher,"2%d %d %d %d %d \0",1755,103322,70650,4,15);
     fill_dummy(strlen((char*) message_cipher)+1,(char*)message_cipher);
 }
 

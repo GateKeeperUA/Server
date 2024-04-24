@@ -16,4 +16,8 @@
     Don't require response
     Initiated by client
 
-->ID E (Emergency)
+->ID 9 (Emergency)
+    9|Emergency\0
+    Not encrypted
+    Don't require response
+    Initiated by client or server

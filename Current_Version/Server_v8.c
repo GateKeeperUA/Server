@@ -31,7 +31,7 @@ int Create_DataBase_Data() {
     if(sqlite3_open("SQLite/Data.db", &db)!=0) {
         return 0;
     }
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS Data(Temperature INT,Pressure INT,Humidity INT,Gas INT,Room INT);",NULL,NULL,&err) != SQLITE_OK) {
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS Data(Temperature INT,Pressure INT,Humidity INT,Gas INT,Occupation INT,Room INT);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError creating Data%s\n",err);
         return 0;
     }
@@ -142,7 +142,7 @@ int Add_to_DataBase_IP(char* serial_num, int room, char* IP,int port) {
     return 1;
 }
 
-int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, int room) {
+int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, int occupation, int room) {
     int find=0;
     char query[100];
     char* err;
@@ -151,21 +151,26 @@ int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, i
     if(sqlite3_open("SQLite/Data.db", &db)!=0) {
         return 0;
     }
-    sqlite3_prepare_v2(db,"select Temperature,Pressure,Humidity,Gas,Room from Data",-1,&stmt,NULL);
+    sqlite3_prepare_v2(db,"select Temperature,Pressure,Humidity,Gas,Occupation,Room from Data",-1,&stmt,NULL);
     while(sqlite3_step(stmt) != SQLITE_DONE) {
-        find = sqlite3_column_int(stmt,4);
+        find = sqlite3_column_int(stmt,5);
         if(find==room){
             sprintf(query,"UPDATE DATA SET Temperature = %d, Pressure = %d, Humidity = %d, Gas = %d Where Room = %d",temperature,pressure,humidity,gas,room);
-            sqlite3_reset(stmt);
             if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
                 printf("\nError %s\n",err);
                 return 0;
             }
+            sprintf(query,"UPDATE DATA SET Occupation = %d Where Room = %d",occupation,room);
+            if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
+                printf("\nError %s\n",err);
+                return 0;
+            }
+            sqlite3_reset(stmt);
             goto DONE;
         }
     }
     sqlite3_reset(stmt);
-    sprintf(query,"insert into Data VALUES(%d,%d,%d,%d,%d);",temperature,pressure,humidity,gas,room);
+    sprintf(query,"insert into Data VALUES(%d,%d,%d,%d,%d,%d);",temperature,pressure,humidity,gas,occupation,room);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
@@ -397,7 +402,7 @@ int XORCipher(char* data, bool send, int room, char type) {
 }
 
 int Receive_Data(char* data, int room) {
-    int temperature=0,pressure=0,humidity=0,gas=0,i=1,j=0,k=0;
+    int temperature=0,pressure=0,humidity=0,gas=0,occupation=0,i=1,j=0,k=0;
     char aux[10];
     for(int i=1;data[i-1]!='\0';i++,k++) {
         if(data[i]!=' ') {
@@ -420,7 +425,11 @@ int Receive_Data(char* data, int room) {
                     break;
                 case 3:
                     gas = atoi(aux);
-                    printf("%dIAQ\n",gas);
+                    printf("%dIAQ ",gas);
+                    break;
+                case 4:
+                    occupation = atoi(aux);
+                    printf("%d Students\n",occupation);
                     break;
             }
             j++;
@@ -429,7 +438,7 @@ int Receive_Data(char* data, int room) {
         }
     }
 
-    if(Add_to_DataBase_Data(temperature,pressure,humidity,gas,room)==0) {return 0;}   
+    if(Add_to_DataBase_Data(temperature,pressure,humidity,gas,occupation,room)==0) {return 0;}   
     return 1;
 }
 
@@ -556,6 +565,7 @@ int main() {
             case '2':
                 room = Find_IP_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
                 if (room>0) {
+                    printf("%s\n",buffer);
                     printf("Data in room of client (nº%d) %s:%d is ", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     if(Receive_Data(buffer,room)==0) {return 1;}
                 }
@@ -563,6 +573,7 @@ int main() {
 
             case '9':
                 Send_Emergency();
+                break;
         }
     }
     return 0;
