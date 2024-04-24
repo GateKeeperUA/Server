@@ -121,7 +121,7 @@ int main() {
     // Filling server information
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(PORT);
-    servaddr.sin_addr.s_addr = inet_addr("192.168.1.86");
+    servaddr.sin_addr.s_addr = inet_addr("192.168.1.100");
 
     printf("Choose room number (3 numbers):\n");
     fgets(room,4,stdin);

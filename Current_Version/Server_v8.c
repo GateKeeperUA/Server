@@ -541,6 +541,7 @@ int main() {
                     else if(permission_UID==1){
                         printf("Client (nº%d) %s:%d -> %s can enter\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
                         key_counter = XORCipher(confirmation,true,room,'1');
+                        if(Add_to_DataBase_Log(room,nmec)==0){return 1;}
                     }
                     else{
                         printf("Client (nº%d) %s:%d -> %s can't enter\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
@@ -549,7 +550,6 @@ int main() {
 
                     sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                     if(Update_Counter_in_DataBase_IP(key_counter,room)==0) {return 1;};
-                    if(Add_to_DataBase_Log(room,nmec)==0){return 1;}
                 }
                 break;
 
