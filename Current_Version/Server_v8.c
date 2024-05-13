@@ -4,9 +4,20 @@
 
 char key[numkeys][keyLen];
 char message_cipher[keyLen];
+char buffer[keyLen];
 struct sockaddr_in servaddr, cliaddr;
 int sockfd;
-char* emergency_message = "9Emergency";
+struct mosquitto * mosq;
+
+struct rooms_recognition {
+    int room;
+    char last_UID[9];
+    int last_time;
+};
+
+struct rooms_recognition recog[300];
+int room_recog_received=0;
+
 
 int Create_DataBase_IP() {
     char* err;
@@ -340,12 +351,125 @@ int Read_NMEC_in_DataBase_ID(char* UID) {
     return NMEC;    
 }
 
-int Initialize(){
-    if(Create_DataBase_IP()==0){return 0;}
-    if(Create_DataBase_ID()==0){return 0;}
-    if(Create_DataBase_Data()==0){return 0;}
-    if(Create_DataBase_Log()==0){return 0;}
+void Send_Emergency(){
+    char* emergency_message = "9Emergency";
+    char* err;
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+    int NMEC;
 
+    RETRY:
+    if(sqlite3_open("SQLite/IP.db", &db)!=0) {
+        goto RETRY;
+    }
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
+    while(sqlite3_step(stmt) != SQLITE_DONE) {
+        cliaddr.sin_family      = AF_INET;
+        cliaddr.sin_addr.s_addr = inet_addr(sqlite3_column_text(stmt,2));
+        cliaddr.sin_port        = htons(sqlite3_column_int(stmt,3));
+        sendto(sockfd, emergency_message, strlen(emergency_message), MSG_CONFIRM, (const struct sockaddr *) &cliaddr, sizeof(cliaddr));
+    }
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+    printf("Emergency warning sent to every Room\n");
+}
+
+void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg) {
+    time_t t;
+    time(&t);
+
+    if(strcmp((char *)msg->payload,"Emergency")==0 && strcmp((char *)msg->topic,"DETI/Emergency")==0) {
+        Send_Emergency();
+    }
+    else if(strcmp((char *)msg->topic,"DETI/Authenticate/Enter")==0) {
+        //*Add confirmation permission of student
+        //*Add sending order to open that room
+        char* confirm;
+        for(int i=0;i<room_recog_received;i++) {
+            if(!strcmp(recog[i].last_UID,msg->payload) && t-5<=recog[i].last_time){
+                printf("%s can enter\n",msg->payload);
+                sprintf(confirm,"1%s",msg->payload);
+                mosquitto_publish(mosq,NULL,"DETI/Authenticate/Confirm",9,confirm,2,false);
+                goto CAN_ENTER;
+            }
+        }
+        sprintf(confirm,"0%s",msg->payload);
+        mosquitto_publish(mosq,NULL,"DETI/Authenticate/Confirm",9,confirm,2,false);
+        printf("%s can't enter\n",msg->payload);
+
+        CAN_ENTER:
+    }
+    else if(strcmp((char *)msg->topic,"DETI/Authenticate/Recognition")==0) {
+        //*Add confirmation that the recognition room number is in DataBase
+        char room_recog[3];
+
+        strncpy(room_recog,msg->payload,3);
+        for (int i=0;i<room_recog_received;i++){
+            if(recog->room==atoi(room_recog)) {
+                memcpy(recog[i].last_UID,msg->payload+3,sizeof(msg->payload));
+                recog[i].last_time = t; 
+                goto CHANGED_UID;
+            }
+        }
+
+        recog[room_recog_received].room = atoi(room_recog);
+        memcpy(recog[room_recog_received].last_UID,msg->payload+3,sizeof(msg->payload));
+        recog[room_recog_received].last_time = t;
+        room_recog_received++;
+
+        CHANGED_UID:
+        
+        printf("Room:%d UID:%s Time:%d\n",recog[0].room,recog[0].last_UID,recog[0].last_time);
+    }
+}
+
+int Create_Thread_MQTT() {
+    mosquitto_lib_init();
+    mosq = mosquitto_new("Server",true,NULL);
+    
+    mosquitto_message_callback_set(mosq,Receive_MQTT);
+
+    int rc = mosquitto_connect(mosq,"192.168.1.100",1883,60);
+    if(rc!=0) {
+        printf("Error\n");
+        mosquitto_destroy(mosq);
+        return 0;
+    }
+    mosquitto_subscribe(mosq,NULL,"DETI/Emergency",2);
+    mosquitto_subscribe(mosq,NULL,"DETI/Authenticate/Enter",2);
+    mosquitto_subscribe(mosq,NULL,"DETI/Authenticate/Recognition",2);
+    mosquitto_loop_start(mosq);
+
+
+    printf("MQTT thread created successfully\n\n");
+}
+
+void Create_Socket() {
+    // Creating socket file descriptor
+    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+       
+    memset(&servaddr, 0, sizeof(servaddr));
+    memset(&cliaddr, 0, sizeof(cliaddr));
+       
+    // Filling server information
+    servaddr.sin_family    = AF_INET; // IPv4
+    servaddr.sin_addr.s_addr = inet_addr(IP_server);
+    servaddr.sin_port = htons(PORT);
+   
+    // Bind the socket with the server address
+    if ( bind(sockfd, (const struct sockaddr *)&servaddr, 
+            sizeof(servaddr)) < 0 )
+    {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+    printf("Socket creation complete\n");
+}
+
+int Read_Keys() {
     char *filename = "Encryption_keys.txt";
     FILE *fp = fopen(filename, "r");
     if (fp == NULL) {
@@ -361,6 +485,16 @@ int Initialize(){
 
     fclose(fp);
     printf("Keys upload completed\n");
+}
+
+int Initialize(){
+    if(Create_DataBase_IP()==0){return 0;}
+    if(Create_DataBase_ID()==0){return 0;}
+    if(Create_DataBase_Data()==0){return 0;}
+    if(Create_DataBase_Log()==0){return 0;}
+    if(Read_Keys()==0){return 0;}
+    Create_Socket();
+    if(Create_Thread_MQTT()==0){return 0;}
 
     return 1;
 }
@@ -442,32 +576,8 @@ int Receive_Data(char* data, int room) {
     return 1;
 }
 
-void Send_Emergency(){
-    char* err;
-    sqlite3* db;
-    sqlite3_stmt* stmt;
-    int NMEC;
-
-    RETRY:
-    if(sqlite3_open("SQLite/IP.db", &db)!=0) {
-        goto RETRY;
-    }
-    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
-    while(sqlite3_step(stmt) != SQLITE_DONE) {
-        cliaddr.sin_family      = AF_INET;
-        cliaddr.sin_addr.s_addr = inet_addr(sqlite3_column_text(stmt,2));
-        cliaddr.sin_port        = htons(sqlite3_column_int(stmt,3));
-        sendto(sockfd, emergency_message, strlen(emergency_message), MSG_CONFIRM, (const struct sockaddr *) &cliaddr, sizeof(cliaddr));
-    }
-    sqlite3_reset(stmt);
-    sqlite3_close(db);
-    printf("Emergency warning sent for every Room\n");
-}
-
 int main() {
-    int find, room, key_counter, permission_UID, nmec;
-    char buffer[keyLen];
-    int len;    
+    int find, room, key_counter, permission_UID, nmec, len;  
     bool restart;
     char serial_num[6], room_[3];
     char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
@@ -475,31 +585,6 @@ int main() {
     char* denial = "931ghxbwti34tq3fzyc0wqxjbq92v9hrjlzndm3xdbgjc2131ouyxxx7dm4rt7tzbd0x9ij6lq5wbm2n1nq0x7ikoavivpu34sditd3i3opuxsfi2r1gzkojgjo96";
 
     if(Initialize()==0){return 1;}    
-       
-    // Creating socket file descriptor
-    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
-        perror("socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-       
-    memset(&servaddr, 0, sizeof(servaddr));
-    memset(&cliaddr, 0, sizeof(cliaddr));
-       
-    // Filling server information
-    servaddr.sin_family    = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = inet_addr(IP_server);
-    servaddr.sin_port = htons(PORT);
-   
-    // Bind the socket with the server address
-    if ( bind(sockfd, (const struct sockaddr *)&servaddr, 
-            sizeof(servaddr)) < 0 )
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-    printf("Socket creation complete\n\n");
-       
-    len = sizeof(cliaddr);
 
     while(1){
         memset((char*) message_cipher, 0, sizeof(message_cipher));
@@ -511,7 +596,6 @@ int main() {
         //! 1 is UID checkup on Database
         //! 2 is temperature data
         //! 9 is emergency
-
         
         switch (buffer[0]){
             case '0':
@@ -565,7 +649,6 @@ int main() {
             case '2':
                 room = Find_IP_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
                 if (room>0) {
-                    printf("%s\n",buffer);
                     printf("Data in room of client (nº%d) %s:%d is ", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     if(Receive_Data(buffer,room)==0) {return 1;}
                 }

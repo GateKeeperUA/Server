@@ -11,6 +11,7 @@
 #include <math.h>
 #include <time.h>
 #include <ctype.h>
+#include <mosquitto.h>
    
 #define PORT    5005
 #define keyLen  128
