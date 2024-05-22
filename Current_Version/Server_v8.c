@@ -8,6 +8,7 @@ char buffer[keyLen];
 struct sockaddr_in servaddr, cliaddr;
 int sockfd;
 struct mosquitto * mosq;
+char UID_recon[8];
 
 struct rooms_recognition {
     int room;
@@ -326,6 +327,35 @@ int Check_UID_in_DataBase_ID(char* UID, int room) {
     return 1;    
 }
 
+int Check_Room_in_DataBase_IP(int room) {
+    char* err;
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+
+    if(sqlite3_open("SQLite/IP.db", &db)!=0) {
+        return 0;
+    }
+
+    sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission from IP",-1,&stmt,NULL);
+
+    int find_room;
+    while(sqlite3_step(stmt) != SQLITE_DONE) {
+        find_room=sqlite3_column_int(stmt,1);
+        if(find_room==room){
+            goto IN_DATABASE;
+        }
+    }
+
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+    return 2;
+    
+    IN_DATABASE:
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+    return 1;    
+}
+
 int Read_NMEC_in_DataBase_ID(char* UID) {
     char* err;
     sqlite3* db;
@@ -349,6 +379,68 @@ int Read_NMEC_in_DataBase_ID(char* UID) {
     sqlite3_reset(stmt);
     sqlite3_close(db);
     return NMEC;    
+}
+
+void fill_dummy(int start, char* data) {
+    for(int i=start;i<keyLen-1;i++) {data[i] = rand()%126;}
+    data[keyLen-1]='\0';
+}
+
+int XORCipher(char* data, bool send, int room, char type) {
+    int counter = Read_Counter_in_DataBase_IP(room);
+    if(send==true){
+        message_cipher[0] = type;
+        for(int i=0;i<strlen(data);i++) {message_cipher[i+1]=data[i];}
+        message_cipher[strlen(data)+1]='\0';
+        fill_dummy(strlen(data)+2,(char*)message_cipher);
+        
+        //if(counter==numkeys-1){counter = 0;}
+        //else {counter++;}
+
+        for (int i=1;i<keyLen-1;i++) {
+            message_cipher[i] = message_cipher[i] ^ key[counter][i-1];
+        }
+	}
+
+    else {
+        for(int i=1;i<keyLen;i++) {message_cipher[i-1]=data[i];}
+
+        for (int i=0;i<keyLen-1;i++) {
+            message_cipher[i] = message_cipher[i] ^ key[counter][i];
+            if(message_cipher[i]=='\0') {break;}
+        }
+    }	
+
+    if(counter==numkeys-1){counter = 0;}
+    else {counter++;}
+
+    return counter;
+}
+
+int Read_UID_in_DataBase_ID(int NMEC) {
+    char* err;
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+    const unsigned char* UID;
+
+    if(sqlite3_open("SQLite/ID.db", &db)!=0) {
+        return 0;
+    }
+
+    sqlite3_prepare_v2(db,"select UID,NMEC,Permission from ID",-1,&stmt,NULL);
+
+    int find_NMEC;
+    while(sqlite3_step(stmt) != SQLITE_DONE) {
+        find_NMEC = sqlite3_column_int(stmt,1);
+        if(find_NMEC==NMEC){
+            UID = sqlite3_column_text(stmt,0);
+            break;
+        }
+    }
+    strncpy(UID_recon,UID,8);
+    sqlite3_reset(stmt);
+    sqlite3_close(db);
+    return 1;    
 }
 
 void Send_Emergency(){
@@ -382,15 +474,18 @@ void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_mess
         Send_Emergency();
     }
     else if(strcmp((char *)msg->topic,"DETI/Authenticate/Enter")==0) {
-        //*Add confirmation permission of student
-        //*Add sending order to open that room
         char* confirm;
         for(int i=0;i<room_recog_received;i++) {
             if(!strcmp(recog[i].last_UID,msg->payload) && t-5<=recog[i].last_time){
-                printf("%s can enter\n",msg->payload);
-                sprintf(confirm,"1%s",msg->payload);
-                mosquitto_publish(mosq,NULL,"DETI/Authenticate/Confirm",9,confirm,2,false);
+                if(Check_UID_in_DataBase_ID(recog[i].last_UID,recog[i].room)==1){
+                    printf("%s can enter\n",msg->payload);
+                    sprintf(confirm,"1%s",msg->payload);
+                    mosquitto_publish(mosq,NULL,"DETI/Authenticate/Confirm",9,confirm,2,false);
+                    int key_counter = XORCipher(confirm,true,recog[i].room,'1'); 
+                    Update_Counter_in_DataBase_IP(key_counter,recog[i].room)==0;
                 goto CAN_ENTER;
+                }
+                
             }
         }
         sprintf(confirm,"0%s",msg->payload);
@@ -400,26 +495,34 @@ void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_mess
         CAN_ENTER:
     }
     else if(strcmp((char *)msg->topic,"DETI/Authenticate/Recognition")==0) {
-        //*Add confirmation that the recognition room number is in DataBase
         char room_recog[3];
+        char NMEC[9];
 
         strncpy(room_recog,msg->payload,3);
+        memcpy(NMEC,msg->payload+3,sizeof(msg->payload));
+        Read_UID_in_DataBase_ID(atoi(NMEC));
+        if(Check_Room_in_DataBase_IP(atoi(room_recog))==2){
+            goto NOT_IN_DATABASE;
+        }
+
         for (int i=0;i<room_recog_received;i++){
             if(recog->room==atoi(room_recog)) {
-                memcpy(recog[i].last_UID,msg->payload+3,sizeof(msg->payload));
+                memcpy(recog[i].last_UID,UID_recon,sizeof(UID_recon));
                 recog[i].last_time = t; 
-                goto CHANGED_UID;
+                goto CHANGED_UID;  
             }
         }
 
         recog[room_recog_received].room = atoi(room_recog);
-        memcpy(recog[room_recog_received].last_UID,msg->payload+3,sizeof(msg->payload));
+        memcpy(recog[room_recog_received].last_UID,UID_recon,sizeof(UID_recon));
         recog[room_recog_received].last_time = t;
         room_recog_received++;
 
         CHANGED_UID:
         
-        printf("Room:%d UID:%s Time:%d\n",recog[0].room,recog[0].last_UID,recog[0].last_time);
+        printf("Room:%d NMEC:%s Time:%d\n",recog[0].room,recog[0].last_UID,recog[0].last_time);
+
+        NOT_IN_DATABASE:
     }
 }
 
@@ -488,6 +591,7 @@ int Read_Keys() {
 }
 
 int Initialize(){
+
     if(Create_DataBase_IP()==0){return 0;}
     if(Create_DataBase_ID()==0){return 0;}
     if(Create_DataBase_Data()==0){return 0;}
@@ -497,42 +601,6 @@ int Initialize(){
     if(Create_Thread_MQTT()==0){return 0;}
 
     return 1;
-}
-   
-void fill_dummy(int start, char* data) {
-    for(int i=start;i<keyLen-1;i++) {data[i] = rand()%126;}
-    data[keyLen-1]='\0';
-}
-   
-int XORCipher(char* data, bool send, int room, char type) {
-    int counter = Read_Counter_in_DataBase_IP(room);
-    if(send==true){
-        message_cipher[0] = type;
-        for(int i=0;i<strlen(data);i++) {message_cipher[i+1]=data[i];}
-        message_cipher[strlen(data)+1]='\0';
-        fill_dummy(strlen(data)+2,(char*)message_cipher);
-        
-        if(counter==numkeys-1){counter = 0;}
-        else {counter++;}
-
-        for (int i=1;i<keyLen-1;i++) {
-            message_cipher[i] = message_cipher[i] ^ key[counter][i-1];
-        }
-	}
-
-    else {
-        for(int i=1;i<keyLen;i++) {message_cipher[i-1]=data[i];}
-
-        for (int i=0;i<keyLen-1;i++) {
-            message_cipher[i] = message_cipher[i] ^ key[counter][i];
-            if(message_cipher[i]=='\0') {break;}
-        }
-    }	
-
-    if(counter==numkeys-1){counter = 0;}
-    else {counter++;}
-
-    return counter;
 }
 
 int Receive_Data(char* data, int room) {
@@ -580,7 +648,7 @@ int main() {
     int find, room, key_counter, permission_UID, nmec, len;  
     bool restart;
     char serial_num[6], room_[3];
-    char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ8UO-";
+    char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ";
     char* confirmation = "4jqz484yl94neddq0twxugnnyty6imjyc5zdeyyizl636mvk48pi1as8fnyc01a9lj3mamlp4jdcmjfviw48uv7fv4mv52gq75atzpus853ov2n8phy59cy3a77wp"; 
     char* denial = "931ghxbwti34tq3fzyc0wqxjbq92v9hrjlzndm3xdbgjc2131ouyxxx7dm4rt7tzbd0x9ij6lq5wbm2n1nq0x7ikoavivpu34sditd3i3opuxsfi2r1gzkojgjo96";
 
@@ -613,8 +681,11 @@ int main() {
                         printf("Client (nº%d) %s:%d -> Has entered\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     }
                     else {
-                        if(Update_Info_in_DataBase_IP(serial_num,room,inet_ntoa(cliaddr.sin_addr),htons(cliaddr.sin_port))==0) {return 1;}    
-                        printf("Client (nº%d) %s:%d -> Has entered\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        if(strcmp(inet_ntoa(cliaddr.sin_addr),"0.0.0.0")){
+                            if(Update_Info_in_DataBase_IP(serial_num,room,inet_ntoa(cliaddr.sin_addr),htons(cliaddr.sin_port))==0) {return 1;}    
+                            printf("Client (nº%d) %s:%d -> Has entered
+                            \n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
+                        }
                     }
                                 
                 break;
@@ -625,7 +696,8 @@ int main() {
             case '1':
                 room = Find_IP_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
                 if (room>0) {
-                    XORCipher(buffer,false,room,'1');
+                    key_counter = XORCipher(buffer,false,room,'1');
+                    if(Update_Counter_in_DataBase_IP(key_counter,room)==0) {return 1;};
                     permission_UID = Check_UID_in_DataBase_ID(message_cipher,room);
                     nmec = Read_NMEC_in_DataBase_ID(message_cipher);
                     if(permission_UID==0) {
@@ -635,14 +707,15 @@ int main() {
                         printf("Client (nº%d) %s:%d -> %s can enter\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
                         key_counter = XORCipher(confirmation,true,room,'1');
                         if(Add_to_DataBase_Log(room,nmec)==0){return 1;}
+                        if(Update_Counter_in_DataBase_IP(key_counter,room)==0) {return 1;};
                     }
                     else{
                         printf("Client (nº%d) %s:%d -> %s can't enter\n", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port), message_cipher);
                         key_counter = XORCipher(denial,true,room,'1'); 
+                        if(Update_Counter_in_DataBase_IP(key_counter,room)==0) {return 1;};
                     }
 
                     sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-                    if(Update_Counter_in_DataBase_IP(key_counter,room)==0) {return 1;};
                 }
                 break;
 
