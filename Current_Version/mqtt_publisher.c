@@ -86,7 +86,7 @@ int main() {
 
     mosquitto_lib_init();
 
-    mosq = mosquitto_new("Server",true,NULL);
+    mosq = mosquitto_new("Server_publish_data",true,NULL);
 
     rc = mosquitto_connect(mosq,"192.168.1.100",1883,60);
     if(rc!=0) {

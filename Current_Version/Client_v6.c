@@ -87,6 +87,10 @@ void *Check_Emergency(void *arg) {
             printf("Emergency!!\n");
             memset(buffer, 0, sizeof(buffer));
         }
+        else if(buffer[0]=='1'){
+            printf("OPening door\n");
+            memset(buffer, 0, sizeof(buffer));
+        }
         usleep(1000);
     }
 
