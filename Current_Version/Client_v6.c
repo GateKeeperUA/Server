@@ -80,7 +80,6 @@ void send_temperature() {
 }
 
 void *Check_Emergency(void *arg) {
-
     while (1) {
         ssize_t bytesRead = recvfrom(sockfd, buffer, keyLen, MSG_DONTWAIT, (struct sockaddr *) &servaddr, &len);
         if (buffer[0]=='9') {
@@ -88,7 +87,7 @@ void *Check_Emergency(void *arg) {
             memset(buffer, 0, sizeof(buffer));
         }
         else if(buffer[0]=='1'){
-            printf("OPening door\n");
+            printf("Opening door\n");
             memset(buffer, 0, sizeof(buffer));
         }
         usleep(1000);
@@ -125,7 +124,7 @@ int main() {
     // Filling server information
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(PORT);
-    servaddr.sin_addr.s_addr = inet_addr("192.168.1.100");
+    servaddr.sin_addr.s_addr = inet_addr("192.168.0.100");
 
     printf("Choose room number (3 numbers):\n");
     fgets(room,4,stdin);
