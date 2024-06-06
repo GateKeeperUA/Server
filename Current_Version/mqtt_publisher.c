@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sqlite3.h>
 #include <time.h>
+#include "IP_conf.h"
 
 #define maxclients 200
 int last_check_room=0, check=0;
@@ -88,7 +89,7 @@ int main() {
 
     mosq = mosquitto_new("Server_publish_data",true,NULL);
 
-    rc = mosquitto_connect(mosq,"192.168.0.100",1883,60);
+    rc = mosquitto_connect(mosq,IP_server,1883,60);
     if(rc!=0) {
         printf("Error\n");
         mosquitto_destroy(mosq);

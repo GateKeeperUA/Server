@@ -76,7 +76,7 @@ int Create_DataBase_Log() {
     if(sqlite3_open("SQLite/Log.db", &db)!=0) {
         return 0;
     }
-    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS LOG(Room INT,NMEC INT,Date TEXT);",NULL,NULL,&err) != SQLITE_OK) {
+    if(sqlite3_exec(db,"CREATE TABLE IF NOT EXISTS LOG(Room INT,NMEC INT,Date DATETIME);",NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError creating Log %s\n",err);
         return 0;
     }
@@ -203,10 +203,9 @@ int Add_to_DataBase_Log(int room, int NMEC) {
     if(sqlite3_open("SQLite/Log.db", &db)!=0) {
         return 0;
     }
-    time(&t);
     char query[100];
 
-    sprintf(query,"insert into Log VALUES(%d,%d,'%s');",room,NMEC,ctime(&t));
+    sprintf(query,"insert into Log VALUES(%d,%d,DATETIME('now'));",room,NMEC);
     if(sqlite3_exec(db,query,NULL,NULL,&err) != SQLITE_OK) {
         printf("\nError %s\n",err);
         return 0;
@@ -524,12 +523,14 @@ void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_mess
         Send_Emergency();
     }
     else if(strcmp((char *)msg->topic,"DETI/Authenticate/Enter")==0) {
-        char* confirm;
+        char confirm[9];
         for(int i=0;i<room_recog_received;i++) {
             if(!strcmp(recog[i].last_UID,msg->payload) && t-5<=recog[i].last_time){
                 if(Check_UID_in_DataBase_ID(recog[i].last_UID,recog[i].room)==1){
                     printf("%s can enter\n",msg->payload);
-                    sprintf(confirm,"1%s",msg->payload);
+                    memset(confirm,0,sizeof(confirm));
+                    strcat(confirm,"1");
+                    strcat(confirm,msg->payload);
                     mosquitto_publish(mosq,NULL,"DETI/Authenticate/Confirm",9,confirm,2,false);
                     int key_counter = XORCipher(confirmation,true,recog[i].room,'1'); 
                     Find_IP_in_DataBase_IP(recog[i].room);
@@ -539,15 +540,17 @@ void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_mess
                 }
                 
             }
-        }
-        sprintf(confirm,"0%s",msg->payload);
+        } 
+        memset(confirm,0,sizeof(confirm));
+        strcat(confirm,"0");
+        strcat(confirm,msg->payload);
         mosquitto_publish(mosq,NULL,"DETI/Authenticate/Confirm",9,confirm,2,false);
         printf("%s can't enter\n",msg->payload);
 
         CAN_ENTER:
     }
     else if(strcmp((char *)msg->topic,"DETI/Authenticate/Recognition")==0) {
-        char room_recog[3];
+        char room_recog[4];
         char NMEC[9];
 
         strncpy(room_recog,msg->payload,3);
@@ -584,7 +587,7 @@ int Create_Thread_MQTT() {
     
     mosquitto_message_callback_set(mosq,Receive_MQTT);
 
-    int rc = mosquitto_connect(mosq,IP_server,1883,60);
+    int rc = mosquitto_connect(mosq,"127.0.0.1",1883,60);
     if(rc!=0) {
         printf("Error\n");
         mosquitto_destroy(mosq);

@@ -12,8 +12,8 @@
 #include <time.h>
 #include <ctype.h>
 #include <mosquitto.h>
+#include "IP_conf.h"
    
 #define PORT    5005
 #define keyLen  128
 #define numkeys 300
-#define IP_server "192.168.0.100"

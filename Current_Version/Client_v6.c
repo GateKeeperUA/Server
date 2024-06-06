@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <errno.h>
+#include "IP_conf.h"
    
 #define PORT     5005
 #define keyLen   128
@@ -124,7 +125,7 @@ int main() {
     // Filling server information
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(PORT);
-    servaddr.sin_addr.s_addr = inet_addr("192.168.0.100");
+    servaddr.sin_addr.s_addr = inet_addr(IP_server);
 
     printf("Choose room number (3 numbers):\n");
     fgets(room,4,stdin);
@@ -179,7 +180,7 @@ int main() {
                 }else {
                     switch(option[0]) {
                         case '1':
-                            sprintf(message,"05af6486");
+                            sprintf(message,"80566f3f");
                             XORCipher(message,true,'1');
                             sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
                             
