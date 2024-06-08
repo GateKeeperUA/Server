@@ -10,6 +10,7 @@
 #define maxclients 200
 int last_check_room=0, check=0;
 
+// Struct to strore data from a room
 struct Data {
     int last_temperature;
     int last_humidity;
@@ -22,6 +23,8 @@ struct Data data[maxclients]={0};
 
 struct mosquitto * mosq;
 
+// Function to send the data from each room, stored in the table Data. Each room is a separated topic. It reads information from
+// Data table every 10 times that it's called to prevent database locked error
 void Send_Data() {
     char publish[128];
     char topic[20];
@@ -86,7 +89,8 @@ int main() {
     int rc,sleep_=1;
 
     mosquitto_lib_init();
-
+    
+    // Connects to MQTT broker
     mosq = mosquitto_new("Server_publish_data",true,NULL);
 
     rc = mosquitto_connect(mosq,IP_server,1883,60);
@@ -97,6 +101,7 @@ int main() {
     }
     printf("Success\n");
 
+    // Sends the available data every second
     while(true) {
         Send_Data();
         sleep(sleep_);

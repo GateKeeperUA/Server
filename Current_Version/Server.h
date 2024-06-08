@@ -13,7 +13,10 @@
 #include <ctype.h>
 #include <mosquitto.h>
 #include "IP_conf.h"
-   
+
+//Used to define UPD port
 #define PORT    5005
+//Used to define encryption key length
 #define keyLen  128
+//Used to define number of encryption keys
 #define numkeys 300

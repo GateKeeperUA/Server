@@ -1,5 +1,3 @@
-// Server side implementation of UDP client-server model
-
 #include "Server.h"
 
 char key[numkeys][keyLen];
@@ -9,8 +7,15 @@ struct sockaddr_in servaddr, cliaddr;
 int sockfd;
 struct mosquitto * mosq;
 char UID_recon[8];
+// Confirmation string
 char* confirmation = "4jqz484yl94neddq0twxugnnyty6imjyc5zdeyyizl636mvk48pi1as8fnyc01a9lj3mamlp4jdcmjfviw48uv7fv4mv52gq75atzpus853ov2n8phy59cy3a77wp"; 
+// Denial string
+char* denial = "931ghxbwti34tq3fzyc0wqxjbq92v9hrjlzndm3xdbgjc2131ouyxxx7dm4rt7tzbd0x9ij6lq5wbm2n1nq0x7ikoavivpu34sditd3i3opuxsfi2r1gzkojgjo96";
+// Initialization strong
+char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ";
 
+
+// Struct to store room, UID and time received by each room related to facial recognition
 struct rooms_recognition {
     int room;
     char last_UID[9];
@@ -21,6 +26,14 @@ struct rooms_recognition recog[300];
 int room_recog_received=0;
 
 
+// Function to create Table IP (responsible to store IP and info related to the clients) if not created when called. Table with the following collums
+// Serial TEXT
+// Room INT
+// IP TEXT
+// Port INT
+// Counter INT
+// Permission INT
+// Ocupation INT
 int Create_DataBase_IP() {
     char* err;
     sqlite3* db;
@@ -37,6 +50,13 @@ int Create_DataBase_IP() {
     return 1;
 }
 
+// Function to create Table Data (responsible to store rooms environmental data and occupation) if not created when called. Table with the following collums
+// Temperature INT
+// Pressure INT
+// Humidity INT
+// Gas INT
+// Occupation INT
+// Room INT
 int Create_DataBase_Data() {
     char* err;
     sqlite3* db;
@@ -53,6 +73,10 @@ int Create_DataBase_Data() {
     return 1;
 }
 
+// Function to create Table ID (responsible to store card UID, struden NMEC and level of permission) if not created when called. Table with the following collums
+// UID TEXT
+// NMEC INT
+// Permission INT
 int Create_DataBase_ID() {
     char* err;
     sqlite3* db;
@@ -69,6 +93,10 @@ int Create_DataBase_ID() {
     return 1;
 }
 
+// Function to create Table Log (responsible to store every entrance in any door with the day and time) if not created when called. Table with the following collums
+// Room INT
+// NMEC INT
+// Date DATETIME
 int Create_DataBase_Log() {
     char* err;
     sqlite3* db;
@@ -85,6 +113,7 @@ int Create_DataBase_Log() {
     return 1;
 }
 
+// Fnction to find room number based on IP on Table IP
 int Find_room_in_DataBase_IP(char *IP) {
     char* err;
     sqlite3* db;
@@ -108,7 +137,8 @@ int Find_room_in_DataBase_IP(char *IP) {
     return room;
 }
 
-int Find_Serial_in_DataBase_IP(char* serial) {
+// Function to find room number based on serial number of rooms' boards
+int Find_serial_in_DataBase_IP(char* serial) {
     int room=0;
     char* err;
     sqlite3* db;
@@ -131,6 +161,7 @@ int Find_Serial_in_DataBase_IP(char* serial) {
     return room;
 }
 
+// Function to add to IP table a new entrance (new serial board number)
 int Add_to_DataBase_IP(char* serial_num, int room, char* IP,int port) {
     char* err;
     sqlite3* db;
@@ -155,6 +186,7 @@ int Add_to_DataBase_IP(char* serial_num, int room, char* IP,int port) {
     return 1;
 }
 
+// Function to add (if new room) or change (if existent already) data related to a certain room
 int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, int occupation, int room) {
     int find=0;
     char query[100];
@@ -194,6 +226,7 @@ int Add_to_DataBase_Data(int temperature, int pressure, int humidity, int gas, i
     return 1;
 }
 
+// Function to add to table Log a new entrance in a door
 int Add_to_DataBase_Log(int room, int NMEC) {
     int month_,space_counter = 0;
     char hour[2], minute[2], second[2], day[2], month[3], year[4];
@@ -214,6 +247,7 @@ int Add_to_DataBase_Log(int room, int NMEC) {
     return 1;
 }
 
+// Function to update keys counter in table IP
 int Update_Counter_in_DataBase_IP(int counter,int room) {
     char* err;
     char query[100];
@@ -234,6 +268,7 @@ int Update_Counter_in_DataBase_IP(int counter,int room) {
     return 1;
 }
 
+// Function to change IP, room and port in table IP based on the serial number (which is constant). ALso updates ocupation and counter to 0
 int Update_Info_in_DataBase_IP(char* serial, int room, char* IP, int port) {
     char IP_[4];
     int IP1=0,IP2=0,IP3=0;
@@ -261,6 +296,7 @@ int Update_Info_in_DataBase_IP(char* serial, int room, char* IP, int port) {
     return 1;
 }
 
+// Function to change occupation in table IP based on the room number
 int Update_Ocupation_in_DataBase_IP(int ocupation, int room) {
     char* err;
     char query[100];
@@ -280,6 +316,7 @@ int Update_Ocupation_in_DataBase_IP(int ocupation, int room) {
     return 1;
 }
 
+// Function to read keys counter of table IP based on the room number
 int Read_Counter_in_DataBase_IP(int room) {
     int counter;
     char* err;
@@ -299,6 +336,7 @@ int Read_Counter_in_DataBase_IP(int room) {
     return counter;    
 }
 
+// Function to check if the UID (in table ID) provided has permission to enter the room specified (in table IP). If it has, returns 1, if not returns 2
 int Check_UID_in_DataBase_ID(char* UID, int room) {
     char* err;
     sqlite3* db;
@@ -353,6 +391,7 @@ int Check_UID_in_DataBase_ID(char* UID, int room) {
     return 1;    
 }
 
+// Function to check if a room is in table IP. If it is, returns 1, if not returns 2
 int Check_Room_in_DataBase_IP(int room) {
     char* err;
     sqlite3* db;
@@ -382,6 +421,7 @@ int Check_Room_in_DataBase_IP(int room) {
     return 1;    
 }
 
+// Function to return NMEC from table ID based on the UID
 int Read_NMEC_in_DataBase_ID(char* UID) {
     char* err;
     sqlite3* db;
@@ -407,11 +447,13 @@ int Read_NMEC_in_DataBase_ID(char* UID) {
     return NMEC;    
 }
 
+// Function to fill encrypted message with characters untill the size specified in Server.h
 void fill_dummy(int start, char* data) {
     for(int i=start;i<keyLen-1;i++) {data[i] = rand()%126;}
     data[keyLen-1]='\0';
 }
 
+// Function respossible for encryption/decryption. The encryption/decryption is based on xor between the message we want to send/receive and the key indicated by the key counter
 int XORCipher(char* data, bool send, int room, char type) {
     int counter = Read_Counter_in_DataBase_IP(room);
     if(send==true){
@@ -440,6 +482,7 @@ int XORCipher(char* data, bool send, int room, char type) {
     return counter;
 }
 
+// Function to return UID from table ID based on NMEC
 int Read_UID_in_DataBase_ID(int NMEC) {
     char* err;
     sqlite3* db;
@@ -466,6 +509,7 @@ int Read_UID_in_DataBase_ID(int NMEC) {
     return 1;    
 }
 
+// Function to send emergency message to every room in table IP
 void Send_Emergency(){
     char* emergency_message = "9Emergency";
     char* err;
@@ -489,6 +533,7 @@ void Send_Emergency(){
     printf("Emergency warning sent to every Room\n");
 }
 
+// Function to find IP in table IP and port based on room number. ALso fills the cliaddr struct so the message can be sent via UDP to that IP
 void Find_IP_in_DataBase_IP(int room){
     char* err;
     sqlite3* db;
@@ -512,6 +557,10 @@ void Find_IP_in_DataBase_IP(int room){
     sqlite3_close(db);
 }
 
+// Function to handle new messages received by MQTT. IT sorts by topics
+// Topic Emergency: sends emergency warning to every room in table IP
+// Topic DETI/Authenticate/Enter: checks if the UID received was registered in the last 5 seconds by any room. If it was, sends via MQTT confirmation, if not, sends a denial
+// Topic DETI/Authenticate/Recognition: stores the room, UID and time of the message received
 void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg) {
     int len;
     time_t t;
@@ -581,6 +630,7 @@ void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_mess
     }
 }
 
+// Function to connect and subscribe topics MQTT. ALso creates a thread to receive messages on that topics
 int Create_Thread_MQTT() {
     mosquitto_lib_init();
     mosq = mosquitto_new("Server",true,NULL);
@@ -602,6 +652,7 @@ int Create_Thread_MQTT() {
     printf("MQTT thread created successfully\n\n");
 }
 
+// Function to create UDP server socket
 void Create_Socket() {
     // Creating socket file descriptor
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
@@ -627,6 +678,7 @@ void Create_Socket() {
     printf("Socket creation complete\n");
 }
 
+// Function to read and store encryption keys from txt file
 int Read_Keys() {
     char *filename = "Encryption_keys.txt";
     FILE *fp = fopen(filename, "r");
@@ -645,6 +697,7 @@ int Read_Keys() {
     printf("Keys upload completed\n");
 }
 
+// Function which calls all initializations need when running the code
 int Initialize(){
 
     if(Create_DataBase_IP()==0){return 0;}
@@ -658,6 +711,7 @@ int Initialize(){
     return 1;
 }
 
+// Function to treat and store the data received correspondent to a room
 int Receive_Data(char* data, int room) {
     int temperature=0,pressure=0,humidity=0,gas=0,occupation=0,i=1,j=0,k=0;
     char aux[10];
@@ -703,9 +757,7 @@ int Receive_Data(char* data, int room) {
 int main() {
     int find, room, key_counter, permission_UID, nmec, len;  
     bool restart;
-    char serial_num[6], room_[4];
-    char* message_init = "%&hqt6G+WuXa4oq*uISC?V20k{gpRgcE&#G_0A62rua7vEoc*2+JrZuHaW*ZSr!=LT=yVK)ef-)w5p[gjyI{emT4nk=C*%QKQ#[Tuk}HQ0){ISk#JYrxUJ";
-    char* denial = "931ghxbwti34tq3fzyc0wqxjbq92v9hrjlzndm3xdbgjc2131ouyxxx7dm4rt7tzbd0x9ij6lq5wbm2n1nq0x7ikoavivpu34sditd3i3opuxsfi2r1gzkojgjo96";
+    char serial_num[6], room_[4];  
 
     if(Initialize()==0){return 1;}    
 
@@ -713,6 +765,8 @@ int main() {
         memset((char*) message_cipher, 0, sizeof(message_cipher));
         memset(buffer, 0, sizeof(buffer));
         memset(serial_num,0,sizeof(serial_num));
+
+        // Waits to receive a UDP message
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len);
         
         //! 0 is new connection
@@ -720,13 +774,16 @@ int main() {
         //! 2 is temperature data
         //! 9 is emergency
         
+        // Checks which is the first digit of the message to redirect to the correct action
         switch (buffer[0]){
+            // Happens when a client connects for the first time. Checks if the message is equal to the message_init. 
+            // If it is saves the data and sends the message_init back, else just sends denial message
             case '0':
                 strncpy(serial_num,buffer+1,6);
                 strncpy(room_,buffer+7,3);
                 
                 room = atoi(room_);
-                find = Find_Serial_in_DataBase_IP(serial_num);
+                find = Find_serial_in_DataBase_IP(serial_num);
                 
                 for(int i=0;i<keyLen-10;i++) {if(buffer[i+10]!=message_init[i]) {goto NOT_RESET;}}
 
@@ -747,6 +804,8 @@ int main() {
                 sendto(sockfd, denial, strlen(denial), MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
                 break;
 
+            // Happens when a client has a card trying to enter. It decrypts the message, checks if the card has authorization and sends 
+            // confirmation/denial message encrypted
             case '1':
                 room = Find_room_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
                 if (room>0) {
@@ -774,6 +833,7 @@ int main() {
                 }
                 break;
 
+            // Happens when a client sends envrironmental data from a room. It just receives the data and stores it
             case '2':
                 room = Find_room_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
                 if (room>0) {
@@ -782,6 +842,7 @@ int main() {
                 }
                 break;
 
+            // Happens when an emergency is sent by a room. It sends the emergency to every room
             case '9':
                 Send_Emergency();
                 sleep(1);
