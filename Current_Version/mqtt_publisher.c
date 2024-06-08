@@ -59,8 +59,7 @@ void Send_Data() {
 
             last_check_room++;
         }
-        ERROR:
-
+        
         sqlite3_reset(stmt);
         sqlite3_close(db);
         printf("\n");
@@ -76,7 +75,7 @@ void Send_Data() {
         }
         printf("\n");
 
-        if(check == 4) { 
+        if(check == 9) { 
             check = 0;
         }
         else {
