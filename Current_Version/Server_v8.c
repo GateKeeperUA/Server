@@ -114,7 +114,7 @@ int Create_DataBase_Log() {
 }
 
 // Fnction to find room number based on IP on Table IP
-int Find_room_in_DataBase_IP(char *IP) {
+int Find_room_with_IP_in_DataBase_IP(char *IP) {
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
@@ -138,7 +138,7 @@ int Find_room_in_DataBase_IP(char *IP) {
 }
 
 // Function to find room number based on serial number of rooms' boards
-int Find_serial_in_DataBase_IP(char* serial) {
+int Find_room_with_serial_in_DataBase_IP(char* serial) {
     int room=0;
     char* err;
     sqlite3* db;
@@ -534,14 +534,13 @@ void Send_Emergency(){
 }
 
 // Function to find IP in table IP and port based on room number. ALso fills the cliaddr struct so the message can be sent via UDP to that IP
-void Find_IP_in_DataBase_IP(int room){
+void Find_IP_with_room_in_DataBase_IP(int room){
     char* err;
     sqlite3* db;
     sqlite3_stmt* stmt;
 
-    RETRY:
     if(sqlite3_open("SQLite/IP.db", &db)!=0) {
-        goto RETRY;
+        return 0;
     }
     sqlite3_prepare_v2(db,"select Serial,Room,IP,Port,Counter,Permission,Ocupation from IP",-1,&stmt,NULL);
     while(sqlite3_step(stmt) != SQLITE_DONE) {
@@ -582,7 +581,7 @@ void Receive_MQTT(struct mosquitto *mosq, void *obj, const struct mosquitto_mess
                     strcat(confirm,msg->payload);
                     mosquitto_publish(mosq,NULL,"DETI/Authenticate/Confirm",9,confirm,2,false);
                     int key_counter = XORCipher(confirmation,true,recog[i].room,'1'); 
-                    Find_IP_in_DataBase_IP(recog[i].room);
+                    Find_IP_with_room_in_DataBase_IP(recog[i].room);
                     sendto(sockfd, (char*)message_cipher, keyLen, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, sizeof(cliaddr));
                     Update_Counter_in_DataBase_IP(key_counter,recog[i].room)==0;
                 goto CAN_ENTER;
@@ -770,8 +769,8 @@ int main() {
         recvfrom(sockfd, buffer, keyLen, MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len);
         
         //! 0 is new connection
-        //! 1 is UID checkup on Database
-        //! 2 is temperature data
+        //! 1 is UID checkup permission
+        //! 2 is room data
         //! 9 is emergency
         
         // Checks which is the first digit of the message to redirect to the correct action
@@ -783,7 +782,7 @@ int main() {
                 strncpy(room_,buffer+7,3);
                 
                 room = atoi(room_);
-                find = Find_serial_in_DataBase_IP(serial_num);
+                find = Find_room_with_serial_in_DataBase_IP(serial_num);
                 
                 for(int i=0;i<keyLen-10;i++) {if(buffer[i+10]!=message_init[i]) {goto NOT_RESET;}}
 
@@ -807,7 +806,7 @@ int main() {
             // Happens when a client has a card trying to enter. It decrypts the message, checks if the card has authorization and sends 
             // confirmation/denial message encrypted
             case '1':
-                room = Find_room_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
+                room = Find_room_with_IP_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
                 if (room>0) {
                     key_counter = XORCipher(buffer,false,room,'1');
                     if(Update_Counter_in_DataBase_IP(key_counter,room)==0) {return 1;};
@@ -835,7 +834,7 @@ int main() {
 
             // Happens when a client sends envrironmental data from a room. It just receives the data and stores it
             case '2':
-                room = Find_room_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
+                room = Find_room_with_IP_in_DataBase_IP(inet_ntoa(cliaddr.sin_addr));
                 if (room>0) {
                     printf("Data in room of client (nº%d) %s:%d is ", room, inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
                     if(Receive_Data(buffer,room)==0) {return 1;}
