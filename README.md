@@ -8,7 +8,9 @@ The client.sh is to simulate a door and the key_generator.sh is to generate news
 # Dependencies
 sudo apt install -libsqlite3 -libmosquitto mosquitto mosquitto-clients
 
-Configure /etc/mosquitto/mosquitto.conf file
+sudo nano /etc/mosquitto/mosquitto.conf file and add the following to the file
+listener 1883
+allow_anonymous true
 
 sudo systemctl start mosquitto
 sudo systemctl enable mosquitto
